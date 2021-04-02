@@ -44,7 +44,7 @@ object cli {
       ),
       Opt(name = "json", longKey = "json", shortKey = Some('j'),
         tpe = Type.Path(F, None()),
-        description = "s\"The JSON file to load project definitions from (mutually exclusive with the 'project' option)\""
+        description = "The JSON file to load project definitions from (mutually exclusive with the 'project' option)"
       ),
       Opt(name = "name", longKey = "name", shortKey = Some('n'),
         tpe = Type.Str(sep = None(), default = None()),
@@ -56,12 +56,12 @@ object cli {
       ),
       Opt(name = "project", longKey = "project", shortKey = Some('p'),
         tpe = Type.Path(F, None()),
-        description = "s\"The project.cmd file accepting the 'json' argument (defaults to <dir>$${Os.fileSep}bin$${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)\""
+        description = "The project.cmd file accepting the 'json' argument (defaults to <dir>${Os.fileSep}bin${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)"
       ),
       Opt(name = "versions", longKey = "versions", shortKey = Some('v'),
         tpe = Type.Path(F, None()),
-        description = "s\"The properties file containing version information (defaults to <dir>$${Os.fileSep}versions.properties)\""
-      ),
+        description = "The properties file containing version information (defaults to <dir>${Os.fileSep}versions.properties)"
+      )
     ),
     groups = ISZ(
       OptGroup(
