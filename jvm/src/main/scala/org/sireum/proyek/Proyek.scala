@@ -290,7 +290,7 @@ object Proyek {
             |</application>"""
 
       xml.writeOver(table.render)
-      println(s"Written $xml")
+      println(s"Wrote $xml")
     }
 
     def writeFileTypes(xml: Os.Path): Unit = {
@@ -304,7 +304,7 @@ object Proyek {
             |  </component>
             |</application>""".render
       )
-      println(s"Written $xml")
+      println(s"Wrote $xml")
     }
 
     val configOptions: Os.Path =
@@ -337,7 +337,7 @@ object Proyek {
           |</project>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeCompiler(dotIdea: Os.Path): Unit = {
@@ -351,7 +351,7 @@ object Proyek {
           |</project>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
@@ -377,7 +377,7 @@ object Proyek {
           |</project>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeScalaSettings(dotIdea: Os.Path): Unit = {
@@ -403,7 +403,7 @@ object Proyek {
           |  </component>
           |</project>""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeInspectionProfiles(dotIdea: Os.Path): Unit = {
@@ -421,7 +421,7 @@ object Proyek {
           |</component>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeUiDesigner(dotIdea: Os.Path): Unit = {
@@ -435,7 +435,7 @@ object Proyek {
           |</project>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
@@ -454,7 +454,7 @@ object Proyek {
           |</component>
           |""".render
     )
-    println(s"Written $f")
+    println(s"Wrote $f")
   }
 
   def ive(path: Os.Path,
@@ -515,7 +515,7 @@ object Proyek {
               |</component>
               |"""
         f.writeOver(st.render)
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
 
       for (lib <- libMap.values) {
@@ -536,7 +536,7 @@ object Proyek {
               |</component>
               |""".render
         )
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
 
       ;{
@@ -568,7 +568,7 @@ object Proyek {
               |</component>
               |""".render
         )
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
     }
 
@@ -640,7 +640,7 @@ object Proyek {
               |"""
         val f = dotIdeaModules / s"${m.id}.iml"
         f.writeOver(st.render)
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
 
       var moduleIds = project.poset.rootNodes
@@ -673,7 +673,7 @@ object Proyek {
               |</module>
               |""".render
         )
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
 
       moduleEntries = moduleEntries :+
@@ -692,7 +692,7 @@ object Proyek {
               |</project>
               |""".render
         )
-        println(s"Written $f")
+        println(s"Wrote $f")
       }
     }
 
