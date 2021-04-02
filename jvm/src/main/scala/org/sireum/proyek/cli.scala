@@ -90,7 +90,7 @@ object cli {
 
   val group: Group = Group(
     name = "proyek",
-    description = "Project tooling",
+    description = "Project tools",
     header = "Sireum Proyek",
     unlisted = F,
     subs = ISZ(iveTool)
