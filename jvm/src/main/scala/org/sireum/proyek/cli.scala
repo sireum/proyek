@@ -97,6 +97,29 @@ object cli {
     )
   )
 
+  val assembleTool: Tool = Tool(
+    name = "assemble",
+    command = "assemble",
+    description = "Sireum Proyek Jar Assembler",
+    header = "Sireum Proyek Jar Assembler",
+    usage = "<options>* <dir>",
+    opts = ISZ(
+      Opt(name = "mainClass", longKey = "main", shortKey = Some('m'),
+        tpe = Type.Str(None(), None()),
+        description = "The main class fully qualified name"
+      ),
+      Opt(name = "par", longKey = "par", shortKey = Some('p'),
+        tpe = Type.Flag(F),
+        description = "Enable parallelization"
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      incrementalOptGroup,
+      ivyOptGroup
+    )
+  )
+
   val compileTool: Tool = Tool(
     name = "compile",
     command = "compile",
@@ -139,7 +162,7 @@ object cli {
     description = "Project tools",
     header = "Sireum Proyek",
     unlisted = F,
-    subs = ISZ(compileTool, iveTool)
+    subs = ISZ(assembleTool, compileTool, iveTool)
   )
 
 }

@@ -44,9 +44,10 @@ trait Module extends JvmPublishOnly {
     else Seq()
 
   final override def ivyDeps = {
-    if (isSourceDep) Agg.empty[Dep]
+    if (isSourceDep) Agg(ivy"org.ow2.asm:asm:$asmVersion")
     else Agg(
-      jpLatest(isCross = false, "sireum", "runtime", "library")
+      jpLatest(isCross = false, "sireum", "runtime", "library"),
+      ivy"org.ow2.asm:asm:$asmVersion"
     )
   }
 

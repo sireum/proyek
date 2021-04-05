@@ -30,7 +30,7 @@ val proyekJvm = moduleJvm(
   id = proyek,
   baseDir = homeDir,
   jvmDeps = ISZ(library),
-  jvmIvyDeps = ISZ()
+  jvmIvyDeps = ISZ("org.ow2.asm:asm:")
 )
 
 val project = Project.empty + proyekJvm

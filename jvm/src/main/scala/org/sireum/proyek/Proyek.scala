@@ -48,6 +48,8 @@ object Proyek {
                 classpath: ISZ[Os.Path],
                 sourceFiles: ISZ[Os.Path],
                 outDir: Os.Path): (B, String) = $
+
+    def rewriteReleaseFence(jar: Os.Path): Unit = $
   }
 
   @datatype class Lib(val name: String,
@@ -183,11 +185,70 @@ object Proyek {
   val testCacheName: String = s"$testOutDirName$cacheSuffix"
 
 
+  def assemble(path: Os.Path,
+               outDirName: String,
+               project: Project,
+               projectName: String,
+               dm: DependencyManager,
+               scalaHome: Os.Path,
+               mainClassNameOpt: Option[String]): Z = {
+
+    val trueF = (_: Os.Path) => T
+
+    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val projectOutDir = proyekDir / "modules"
+
+    val assembleDir = proyekDir / "assemble"
+    val contentDir = assembleDir / "content"
+    val jar = assembleDir / s"$projectName.jar"
+    jar.removeAll()
+
+    println(s"Assembling ...")
+
+    contentDir.removeAll()
+    contentDir.mkdirAll()
+
+    val metaDir = contentDir / "META-INF"
+    metaDir.mkdirAll()
+
+    (scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
+
+    for (lib <- dm.libMap.values) {
+      Os.path(lib.main).unzipTo(contentDir)
+    }
+
+    for (m <- project.modules.values) {
+      val mDir = projectOutDir / m.id / mainOutDirName
+      mDir.overlayCopy(contentDir, F, F, trueF, F)
+      for (r <- m.resources) {
+        Os.path(r).overlayCopy(contentDir, F, F, trueF, F)
+      }
+    }
+
+    val manifest = metaDir / "MANIFEST.MF"
+    val mainOpt: Option[ST] = mainClassNameOpt.map((mainClassName: String) => st"Main-Class: $mainClassName")
+    manifest.writeOver(
+      st"""Manifest-Version: 1.0
+          |Created-By: Sireum Proyek
+          |$mainOpt
+          |""".render
+    )
+
+    contentDir.zipTo(jar)
+
+    Ext.rewriteReleaseFence(jar)
+
+    println(s"Wrote $jar")
+
+    return 0
+  }
+
   def compile(path: Os.Path,
               outDirName: String,
               project: Project,
               versions: Map[String, String],
               projectName: String,
+              dm: DependencyManager,
               javaHome: Os.Path,
               scalaHome: Os.Path,
               scalacPlugin: Os.Path,
@@ -196,7 +257,7 @@ object Proyek {
               par: B,
               sha3: B): Z = {
 
-    val proyekDir = path / outDirName / s"$projectName-proyek"
+    val proyekDir = getProyekDir(path, outDirName, projectName)
 
     val projectOutDir = proyekDir / "modules"
 
@@ -212,8 +273,6 @@ object Proyek {
     if (compileAll) {
       versionsCache.writeOver(Json.Printer.printMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render)
     }
-
-    val dm = DependencyManager(project, HashSMap ++ versions.entries, F, F)
 
     val scalacOptions = ISZ[String](
       "-target:jvm-1.8",
@@ -402,10 +461,8 @@ object Proyek {
 
   def ive(path: Os.Path,
           project: Project,
-          versions: Map[String, String],
           projectName: String,
-          withSource: B,
-          withDoc: B,
+          dm: DependencyManager,
           outDirName: String,
           scalacPlugin: Os.Path,
           scalaVersion: String,
@@ -420,8 +477,6 @@ object Proyek {
 
     val dotIdea = path / ".idea"
     dotIdea.mkdirAll()
-
-    val dm = DependencyManager(project, HashSMap ++ versions.entries, withSource, withDoc)
 
     def writeLibraries(): Unit = {
       val ideaLib = dotIdea / "libraries"
@@ -629,6 +684,9 @@ object Proyek {
 
     return 0
   }
+
+  @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String): Os.Path =
+    path / outDirName / s"$projectName"
 
   @strictpure def libName(cif: CoursierFileInfo): String = s"${cif.org}.${cif.module}"
 
