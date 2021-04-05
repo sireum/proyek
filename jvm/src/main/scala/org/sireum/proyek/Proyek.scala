@@ -428,7 +428,7 @@ object Proyek {
         }
       }
       val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
-      println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")}".render)
+      println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
       val r: ISZ[(CompileStatus.Type, String)] =
         if (par) ops.ISZOps(nexts).mParMap(compileModule _) else for (next <- nexts) yield compileModule(next)
       var ok = T
