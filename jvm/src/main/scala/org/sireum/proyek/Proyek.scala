@@ -65,11 +65,11 @@ object Proyek {
         for (ivyDep <- m.ivyDeps) {
           val v = getVersion(ivyDep)
           r = r + ivyDep ~> s"$ivyDep$v"
-          val ivyDepOps = ops.StringOps(ivyDep)
-          if (ivyDepOps.endsWith("::")) {
-            val dep = s"${ivyDepOps.substring(0, ivyDep.size - 2)}$sjsSuffix:"
-            r = r + dep ~> s"$dep$v"
-          }
+          //val ivyDepOps = ops.StringOps(ivyDep)
+          //if (ivyDepOps.endsWith("::")) {
+          //  val dep = s"${ivyDepOps.substring(0, ivyDep.size - 2)}$sjsSuffix:"
+          //  r = r + dep ~> s"$dep$v"
+          //}
         }
       }
       r
@@ -134,11 +134,11 @@ object Proyek {
       }
       for (id <- m.ivyDeps) {
         r = r + ivyDeps.get(id).get
-        val idOps = ops.StringOps(id)
-        if (idOps.endsWith("::")) {
-          val dep = s"${idOps.substring(0, id.size - 2)}$sjsSuffix:"
-          r = r + ivyDeps.get(dep).get
-        }
+        //val idOps = ops.StringOps(id)
+        //if (idOps.endsWith("::")) {
+        //  val dep = s"${idOps.substring(0, id.size - 2)}$sjsSuffix:"
+        //  r = r + ivyDeps.get(dep).get
+        //}
       }
       return r.elements
     }
