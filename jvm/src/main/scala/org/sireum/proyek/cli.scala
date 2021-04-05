@@ -31,18 +31,32 @@ import org.sireum.cli.CliOpt._
 
 object cli {
 
-  val iveTool: Tool = Tool(
-    name = "ive",
-    command = "ive",
-    description = "Sireum IVE Proyek",
-    header = "Sireum IVE Proyek",
-    usage = "<options>* <dir>",
+  val ivyOptGroup: OptGroup = OptGroup(
+    name = "Ivy Dependencies",
     opts = ISZ(
-      Opt(name = "force", longKey = "force", shortKey = Some('f'),
-        tpe = Type.Flag(F),
-        description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
+      Opt(name = "cache", longKey = "cache", shortKey = Some('c'),
+        tpe = Type.Path(F, None()),
+        description = "Ivy cache directory (defaults to couriser's default cache directory)"
       ),
-      Opt(name = "json", longKey = "json", shortKey = Some('j'),
+      Opt(name = "sources", longKey = "no-sources", shortKey = None(),
+        tpe = Type.Flag(T),
+        description = "Disable retrieval of source files from Ivy dependencies"
+      ),
+      Opt(name = "docs", longKey = "no-docs", shortKey = None(),
+        tpe = Type.Flag(T),
+        description = "Disable retrieval of javadoc files from Ivy dependencies"
+      ),
+      Opt(name = "repositories", longKey = "repositories", shortKey = Some('r'),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Disable retrieval of javadoc files from Ivy dependencies"
+      )
+    )
+  )
+
+  val projectOptGroup: OptGroup = OptGroup(
+    name = "Project",
+    opts = ISZ(
+      Opt(name = "json", longKey = "json", shortKey = None(),
         tpe = Type.Path(F, None()),
         description = "The JSON file to load project definitions from (mutually exclusive with the 'project' option)"
       ),
@@ -54,37 +68,69 @@ object cli {
         tpe = Type.Str(sep = None(), default = Some("out")),
         description = "Output directory name under <dir>"
       ),
-      Opt(name = "project", longKey = "project", shortKey = Some('p'),
+      Opt(name = "project", longKey = "project", shortKey = None(),
         tpe = Type.Path(F, None()),
         description = "The project.cmd file accepting the 'json' argument (defaults to <dir>${Os.fileSep}bin${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)"
+      ),
+      Opt(name = "symlink", longKey = "symlink", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Follow symbolic link when searching for files"
       ),
       Opt(name = "versions", longKey = "versions", shortKey = Some('v'),
         tpe = Type.Path(F, None()),
         description = "The properties file containing version information (defaults to <dir>${Os.fileSep}versions.properties)"
       )
+    )
+  )
+
+  val incrementalOptGroup: OptGroup = OptGroup(
+    name = "Incremental Compilation",
+    opts = ISZ(
+      Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
+        tpe = Type.Flag(F),
+        description = "Fresh compilation from a clean slate"
+      ),
+      Opt(name = "sha3", longKey = "sha3", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Use SHA3 instead of time stamp for detecting file changes"
+      )
+    )
+  )
+
+  val compileTool: Tool = Tool(
+    name = "compile",
+    command = "compile",
+    description = "Sireum Proyek Compiler",
+    header = "Sireum Proyek Compiler",
+    usage = "<options>* <dir>",
+    opts = ISZ(
+      Opt(name = "par", longKey = "par", shortKey = Some('p'),
+        tpe = Type.Flag(F),
+        description = "Enable parallelization"
+      )
     ),
     groups = ISZ(
-      OptGroup(
-        name = "Ivy Dependencies",
-        opts = ISZ(
-          Opt(name = "cache", longKey = "cache", shortKey = Some('c'),
-            tpe = Type.Path(F, None()),
-            description = "Ivy cache directory (defaults to couriser's default cache directory)"
-          ),
-          Opt(name = "sources", longKey = "no-sources", shortKey = None(),
-            tpe = Type.Flag(T),
-            description = "Disable retrieval of source files from Ivy dependencies"
-          ),
-          Opt(name = "docs", longKey = "no-docs", shortKey = None(),
-            tpe = Type.Flag(T),
-            description = "Disable retrieval of javadoc files from Ivy dependencies"
-          ),
-          Opt(name = "repositories", longKey = "repositories", shortKey = Some('r'),
-            tpe = Type.Str(sep = Some(','), default = None()),
-            description = "Disable retrieval of javadoc files from Ivy dependencies"
-          )
-        )
+      projectOptGroup,
+      incrementalOptGroup,
+      ivyOptGroup
+    )
+  )
+
+  val iveTool: Tool = Tool(
+    name = "ive",
+    command = "ive",
+    description = "Sireum IVE Proyek Generator",
+    header = "Sireum IVE Proyek",
+    usage = "<options>* <dir>",
+    opts = ISZ(
+      Opt(name = "force", longKey = "force", shortKey = Some('f'),
+        tpe = Type.Flag(F),
+        description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
       )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      ivyOptGroup
     )
   )
 
@@ -93,7 +139,7 @@ object cli {
     description = "Project tools",
     header = "Sireum Proyek",
     unlisted = F,
-    subs = ISZ(iveTool)
+    subs = ISZ(compileTool, iveTool)
   )
 
 }

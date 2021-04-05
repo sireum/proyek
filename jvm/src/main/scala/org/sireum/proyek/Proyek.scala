@@ -32,10 +32,142 @@ import org.sireum.project.{Project, Module}
 
 object Proyek {
 
+  @enum object CompileStatus {
+    'Compiled
+    'Skipped
+    'Error
+  }
+
+  @ext("Proyek_Ext") object Ext {
+    def compile(mid: String,
+                category: String,
+                javaHome: Os.Path,
+                scalaHome: Os.Path,
+                scalacOptions: ISZ[String],
+                javacOptions: ISZ[String],
+                classpath: ISZ[Os.Path],
+                sourceFiles: ISZ[Os.Path],
+                outDir: Os.Path): (B, String) = $
+  }
+
   @datatype class Lib(val name: String,
+                      val org: String,
+                      val module: String,
                       val main: String,
                       val sourcesOpt: Option[String],
                       val javadocOpt: Option[String])
+
+  @record class DependencyManager(project: Project, versions: HashSMap[String, String], withSource: B, withDoc: B) {
+
+    val ivyDeps: HashSMap[String, String] = {
+      var r = HashSMap.empty[String, String]
+      for (m <- project.modules.values) {
+        for (ivyDep <- m.ivyDeps) {
+          val v = getVersion(ivyDep)
+          r = r + ivyDep ~> s"$ivyDep$v"
+          val ivyDepOps = ops.StringOps(ivyDep)
+          if (ivyDepOps.endsWith("::")) {
+            val dep = s"${ivyDepOps.substring(0, ivyDep.size - 2)}$sjsSuffix:"
+            r = r + dep ~> s"$dep$v"
+          }
+        }
+      }
+      r
+    }
+
+    val libMap: HashSMap[String, Lib] = {
+      var r = HashSMap.empty[String, Lib]
+      for (cif <- Coursier.fetchClassifiers(ivyDeps.values, buildClassifiers(withSource, withDoc))) {
+        val name = libName(cif)
+        val p = cif.path
+        val pNameOps = ops.StringOps(p.string)
+        if (!ignoredLibraryNames.contains(name)) {
+          var lib: Lib = r.get(name) match {
+            case Some(l) => l
+            case _ => Lib(name, cif.org, cif.module, "", None(), None())
+          }
+          if (pNameOps.endsWith(sourceJarSuffix)) {
+            lib = lib(sourcesOpt = Some(p.string))
+          } else if (pNameOps.endsWith(docJarSuffix)) {
+            lib = lib(javadocOpt = Some(p.string))
+          } else if (pNameOps.endsWith(jarSuffix)) {
+            lib = lib(main = p.string)
+          } else {
+            halt(s"Expecting a file with .jar extension but found '$p'")
+          }
+          r = r + name ~> lib
+        }
+      }
+      r
+    }
+
+    var tLibMap: HashMap[String, ISZ[Lib]] = HashMap.empty
+
+    var dLibMap: HashMap[String, ISZ[Lib]] = HashMap.empty
+
+    @pure def getVersion(ivyDep: String): String = {
+      versions.get(ops.StringOps(ivyDep).replaceAllChars(':', '%'))match {
+        case Some(v) => return v
+        case _ => halt(s"Could not find version information for '$ivyDep' in $versions")
+      }
+    }
+
+    @pure def getModule(id: String): Module = {
+      project.modules.get(id) match {
+        case Some(m) => return m
+        case _ => halt(s"Could not find module with ID '$id'")
+      }
+    }
+
+    @memoize def computeTransitiveDeps(m: Module): ISZ[String] = {
+      var r = HashSSet.empty[String]
+      for (mDep <- m.deps) {
+        r = r ++ computeTransitiveDeps(getModule(mDep)) + mDep
+      }
+      return r.elements
+    }
+
+    @memoize def computeTransitiveIvyDeps(m: Module): ISZ[String] = {
+      var r = HashSSet.empty[String]
+      for (mid <- m.deps) {
+        r = r ++ computeTransitiveIvyDeps(project.modules.get(mid).get)
+      }
+      for (id <- m.ivyDeps) {
+        r = r + ivyDeps.get(id).get
+        val idOps = ops.StringOps(id)
+        if (idOps.endsWith("::")) {
+          val dep = s"${idOps.substring(0, id.size - 2)}$sjsSuffix:"
+          r = r + ivyDeps.get(dep).get
+        }
+      }
+      return r.elements
+    }
+
+    def fetchTransitiveLibs(m: Module): ISZ[Lib] = {
+      tLibMap.get(m.id) match {
+        case Some(libs) => return libs
+        case _ =>
+      }
+      val r: ISZ[Lib] =
+        for (cif <- Coursier.fetch(computeTransitiveIvyDeps(m)) if !ignoredLibraryNames.contains(libName(cif))) yield libMap.get(libName(cif)).get
+      tLibMap = tLibMap + m.id ~> r
+      return r
+    }
+
+    def fetchDiffLibs(m: Module): ISZ[Lib] = {
+      dLibMap.get(m.id) match {
+        case Some(libs) => return libs
+        case _ =>
+      }
+      var s = HashSSet ++ fetchTransitiveLibs(m)
+      for (mDep <- m.deps) {
+        s = s -- fetchTransitiveLibs(getModule(mDep))
+      }
+      val r = s.elements
+      dLibMap = dLibMap + m.id ~> r
+      return r
+    }
+  }
 
   val jarSuffix: String = ".jar"
   val sourceJarSuffix: String = "-sources.jar"
@@ -44,417 +176,228 @@ object Proyek {
   val ignoredLibraryNames: HashSet[String] = HashSet ++ ISZ[String](
     "org.scala-lang.scala-library", "org.scala-lang.scala-reflect", "org.scala-lang.scala-compiler"
   )
+  val cacheSuffix: String = "-inc-cache.zip"
+  val mainOutDirName: String = "classes"
+  val mainCacheName: String = s"$mainOutDirName$cacheSuffix"
+  val testOutDirName: String = "test-classes"
+  val testCacheName: String = s"$testOutDirName$cacheSuffix"
 
-  @strictpure def libName(cif: CoursierFileInfo): String = s"${cif.org}.${cif.module}"
 
-  @pure def buildClassifiers(withSource: B, withDoc: B): ISZ[CoursierClassifier.Type] = {
-    var classifiers = ISZ[CoursierClassifier.Type](CoursierClassifier.Default)
-    if (withSource) {
-      classifiers = classifiers :+ CoursierClassifier.Sources
-    }
-    if (withDoc) {
-      classifiers = classifiers :+ CoursierClassifier.Javadoc
-    }
-    return classifiers
-  }
+  def compile(path: Os.Path,
+              outDirName: String,
+              project: Project,
+              versions: Map[String, String],
+              projectName: String,
+              javaHome: Os.Path,
+              scalaHome: Os.Path,
+              scalacPlugin: Os.Path,
+              followSymLink: B,
+              fresh: B,
+              par: B,
+              sha3: B): Z = {
 
-  @pure def getVersion(versions: Map[String, String], ivyDep: String): String = {
-    versions.get(ops.StringOps(ivyDep).replaceAllChars(':', '%'))match {
-      case Some(v) => return v
-      case _ => halt(s"Could not find version information for '$ivyDep' in $versions")
-    }
-  }
+    val proyekDir = path / outDirName / s"$projectName-proyek"
 
-  @pure def collectIvyDeps(versions: Map[String, String], project: Project): HashSMap[String, String] = {
-    var ivyDeps = HashSMap.empty[String, String]
-    for (m <- project.modules.values) {
-      for (ivyDep <- m.ivyDeps) {
-        val v = getVersion(versions, ivyDep)
-        ivyDeps = ivyDeps + ivyDep ~> s"$ivyDep$v"
-        val ivyDepOps = ops.StringOps(ivyDep)
-        if (ivyDepOps.endsWith("::")) {
-          val dep = s"${ivyDepOps.substring(0, ivyDep.size - 2)}$sjsSuffix:"
-          ivyDeps = ivyDeps + dep ~> s"$dep$v"
-        }
-      }
-    }
-    return ivyDeps
-  }
+    val projectOutDir = proyekDir / "modules"
 
-  @pure def normalizePath(path: String): String = {
-    if (Os.isWin) {
-      return path
+    val versionsCache = proyekDir / "versions.json"
+
+    val compileAll: B = if (versionsCache.exists) {
+      val jsonParser = Json.Parser.create(versionsCache.read)
+      val m = jsonParser.parseMap(jsonParser.parseString _, jsonParser.parseString _)
+      if (jsonParser.errorOpt.isEmpty) m != versions else T
     } else {
-      return ops.StringOps(path).replaceAllChars('\\', '/')
+      T
     }
-  }
+    if (compileAll) {
+      versionsCache.writeOver(Json.Printer.printMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render)
+    }
 
-  @strictpure def relUri(from: Os.Path, to: Os.Path): String = normalizePath(from.relativize(to).string)
+    val dm = DependencyManager(project, HashSMap ++ versions.entries, F, F)
 
-  def buildLibMap(ivyDeps: ISZ[String], withSource: B, withDoc: B): HashSMap[String, Lib] = {
-    var libMap = HashSMap.empty[String, Lib]
-    for (cif <- Coursier.fetchClassifiers(ivyDeps, buildClassifiers(withSource, withDoc))) {
-      val name = libName(cif)
-      val p = cif.path
-      val pNameOps = ops.StringOps(p.string)
-      if (!ignoredLibraryNames.contains(name)) {
-        var lib: Lib = libMap.get(name) match {
-          case Some(l) => l
-          case _ => Lib(name, "", None(), None())
-        }
-        if (pNameOps.endsWith(sourceJarSuffix)) {
-          lib = lib(sourcesOpt = Some(p.string))
-        } else if (pNameOps.endsWith(docJarSuffix)) {
-          lib = lib(javadocOpt = Some(p.string))
-        } else if (pNameOps.endsWith(jarSuffix)) {
-          lib = lib(main = p.string)
+    val scalacOptions = ISZ[String](
+      "-target:jvm-1.8",
+      "-deprecation",
+      "-Yrangepos",
+      "-Ydelambdafy:method",
+      "-feature",
+      "-unchecked",
+      "-Xfatal-warnings",
+      "-language:postfixOps",
+      s"-Xplugin:$scalacPlugin"
+    )
+    val javacOptions = ISZ[String](
+      "-source", "1.8",
+      "-target", "1.8",
+      "-encoding", "utf8",
+      "-XDignore.symbol.file",
+      "-Xlint:-options"
+    )
+
+    def compileModule(pair: (Module, B)): (CompileStatus.Type, String) = {
+
+      @strictpure def isJavaOrScala(p: Os.Path): B = p.ext == "scala" || p.ext == "java"
+      def findSources(p: Os.Path): ISZ[Os.Path] = {
+        return if (p.exists) for (p <- Os.Path.walk(p, F, followSymLink, isJavaOrScala _)) yield p else ISZ()
+      }
+      @pure def fingerprint(p: Os.Path): String = {
+        if (sha3) {
+          val sha = crypto.SHA3.init256
+          sha.update(p.readU8s)
+          return st"${sha.finalise()}".render
         } else {
-          halt(s"Expecting a file with .jar extension but found '$p'")
+          return s"${p.lastModified}}"
         }
-        libMap = libMap + name ~> lib
+      }
+
+      val (m, forceCompile) = pair
+
+      val base: String = m.subPathOpt match {
+        case Some(p) => s"${m.basePath}$p"
+        case _ => m.basePath
+      }
+      var sourceFiles = ISZ[Os.Path]()
+      var testSourceFiles = ISZ[Os.Path]()
+      for (source <- m.sources) {
+        sourceFiles = sourceFiles ++ findSources(Os.path(s"$base$source"))
+      }
+      for (testSource <- m.testSources) {
+        testSourceFiles = testSourceFiles ++ findSources(Os.path(s"$base$testSource"))
+      }
+
+      val fileTimestampMap = HashMap.empty[String, String] ++ (
+        if (par && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
+          mParMap((p: Os.Path) => (path.relativize(p).string, fingerprint(p)))
+        else (for (p <- sourceFiles ++ testSourceFiles) yield (path.relativize(p).string, fingerprint(p)))
+      )
+
+      val fileTimestampCache = projectOutDir / s"${m.id}${if (sha3) ".sha3" else ""}.json"
+
+      val compile: B = if (!forceCompile && fileTimestampCache.exists) {
+        val jsonParser = Json.Parser.create(fileTimestampCache.read)
+        val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
+        if (jsonParser.errorOpt.isEmpty) map != fileTimestampMap else T
+      } else {
+        T
+      }
+
+      if (compile) {
+        fileTimestampCache.writeOver(Json.Printer.printHashMap(F, fileTimestampMap, Json.Printer.printString _,
+          Json.Printer.printString _).render)
+      } else {
+        return (CompileStatus.Skipped, "")
+      }
+
+      var classpath: ISZ[Os.Path] = (for (lib <- dm.fetchTransitiveLibs(m)) yield Os.path(lib.main))
+      for (mDep <- dm.computeTransitiveDeps(m)) {
+        val p = projectOutDir / mDep / mainOutDirName
+        if (p.exists) {
+          classpath = classpath :+ p
+        }
+      }
+
+      val mainOutDir = projectOutDir / m.id / mainOutDirName
+      classpath = classpath :+ mainOutDir
+      mainOutDir.removeAll()
+      mainOutDir.mkdirAll()
+      val (mainOk, mainOut) = Ext.compile(
+        mid = m.id,
+        category = "main",
+        javaHome = javaHome,
+        scalaHome = scalaHome,
+        scalacOptions = scalacOptions,
+        javacOptions = javacOptions,
+        classpath = classpath,
+        sourceFiles = sourceFiles,
+        outDir = mainOutDir
+      )
+
+      if (mainOk) {
+        if (testSourceFiles.nonEmpty) {
+          val testOutDir = projectOutDir / m.id / testOutDirName
+
+          for (mDep <- dm.computeTransitiveDeps(m)) {
+            val p = projectOutDir / mDep / testOutDirName
+            if (p.exists) {
+              classpath = classpath :+ p
+            }
+          }
+          classpath = classpath :+ testOutDir
+          testOutDir.removeAll()
+          testOutDir.mkdirAll()
+
+          val (testOk, testOut) = Ext.compile(
+            mid = m.id,
+            category = "test",
+            javaHome = javaHome,
+            scalaHome = scalaHome,
+            scalacOptions = scalacOptions,
+            javacOptions = javacOptions,
+            classpath = classpath,
+            sourceFiles = testSourceFiles,
+            outDir = testOutDir
+          )
+          if (testOk) {
+            return (CompileStatus.Compiled, s"$mainOut$testOut")
+          } else {
+            return (CompileStatus.Error, s"$mainOut$testOut")
+          }
+        } else {
+          return (CompileStatus.Compiled, mainOut)
+        }
+      } else {
+        return (CompileStatus.Error, mainOut)
       }
     }
 
-    return libMap
-  }
-
-  def writeApplicationConfigs(force: B,
-                              ideaDir:
-                              Os.Path,
-                              javaHome: Os.Path,
-                              javaVersion: String,
-                              jbrVersion: String,
-                              devSuffix: String): Unit = {
-
-    def writeJdkTable(xml: Os.Path): Unit = {
-
-      val jbrHome: Os.Path = if (Os.isMac) ideaDir / "jbr" / "Contents" / "Home" else ideaDir / "jbr"
-
-      val jdkModules: Set[String] = Set ++ (for (p <- (javaHome / "jmods").list if p.ext === "jmod") yield
-        ops.StringOps(p.name).substring(0, p.name.size - 5)
-      )
-
-      val jbrModules: Set[String] = Set ++ ISZ(
-        "gluegen.rt", "java.base", "java.compiler", "java.datatransfer", "java.desktop", "java.instrument",
-        "java.logging", "java.management", "java.management.rmi", "java.naming", "java.net.http", "java.prefs",
-        "java.rmi", "java.scripting", "java.se", "java.security.jgss", "java.security.sasl", "java.smartcardio",
-        "java.sql", "java.sql.rowset", "java.transaction.xa", "java.xml", "java.xml.crypto", "jcef",
-        "jdk.accessibility", "jdk.aot", "jdk.attach", "jdk.charsets", "jdk.compiler", "jdk.crypto.cryptoki",
-        "jdk.crypto.ec", "jdk.dynalink", "jdk.hotspot.agent", "jdk.httpserver", "jdk.internal.ed",
-        "jdk.internal.jvmstat", "jdk.internal.le", "jdk.internal.vm.ci", "jdk.internal.vm.compiler",
-        "jdk.internal.vm.compiler.management", "jdk.jdi", "jdk.jdwp.agent", "jdk.jfr", "jdk.jsobject",
-        "jdk.localedata", "jdk.management", "jdk.management.agent", "jdk.management.jfr", "jdk.naming.dns",
-        "jdk.naming.rmi", "jdk.net", "jdk.pack", "jdk.scripting.nashorn", "jdk.scripting.nashorn.shell",
-        "jdk.sctp", "jdk.security.auth", "jdk.security.jgss", "jdk.unsupported", "jdk.xml.dom", "jdk.zipfs",
-        "jogl.all"
-      )
-
-      val ideaLibDir = ideaDir / "lib"
-      val ideaPluginsDir = ideaDir / "plugins"
-
-      val (jdkClassPath, jdkSourcePath): (ISZ[ST], ISZ[ST]) =
-        ( for (m <- jdkModules.elements) yield
-          st"""            <root url="jrt://${normalizePath(javaHome.string)}!/$m" type="simple" />""",
-          for (m <- jdkModules.elements) yield
-            st"""            <root url="jar://${normalizePath(javaHome.string)}/lib/src.zip!/$m" type="simple" />""")
-      val jbrClassPath: ISZ[ST] = for (m <- jbrModules.elements) yield
-        st"""            <root url="jrt://${normalizePath(jbrHome.string)}!/$m" type="simple" />"""
-      val ideaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaLibDir, F, T, f => ops.StringOps(f.string).endsWith(".jar")))
-        yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
-      val ideaJavaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaPluginsDir / "java" / "lib", F, T, f => ops.StringOps(f.string).endsWith(".jar")))
-        yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
-      val ideaScalaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaPluginsDir / "Scala" / "lib", F, T, f => ops.StringOps(f.string).endsWith(".jar")))
-        yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
-
-      val idea =
-        st"""    <jdk version="2">
-            |      <name value="Sireum$devSuffix" />
-            |      <type value="IDEA JDK" />
-            |      <version value="$jbrVersion" />
-            |      <homePath value="$ideaDir" />
-            |      <roots>
-            |        <annotationsPath>
-            |          <root type="composite">
-            |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/java/lib/jdkAnnotations.jar!/" type="simple" />
-            |          </root>
-            |        </annotationsPath>
-            |        <classPath>
-            |          <root type="composite">
-            |${(jbrClassPath, "\n")}
-            |${(ideaLibs, "\n")}
-            |          </root>
-            |        </classPath>
-            |        <javadocPath>
-            |          <root type="composite">
-            |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
-            |          </root>
-            |        </javadocPath>
-            |      </roots>
-            |      <additional sdk="Jbr">
-            |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
-            |      </additional>
-            |    </jdk>"""
-
-
-      val ideaScala =
-        st"""    <jdk version="2">
-            |      <name value="Sireum$devSuffix (with Scala Plugin)" />
-            |      <type value="IDEA JDK" />
-            |      <version value="$jbrVersion" />
-            |      <homePath value="$ideaDir" />
-            |      <roots>
-            |        <annotationsPath>
-            |          <root type="composite" />
-            |        </annotationsPath>
-            |        <classPath>
-            |          <root type="composite">
-            |${(jbrClassPath, "\n")}
-            |${(ideaLibs, "\n")}
-            |${(ideaJavaLibs, "\n")}
-            |${(ideaScalaLibs, "\n")}
-            |          </root>
-            |        </classPath>
-            |        <javadocPath>
-            |          <root type="composite">
-            |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
-            |          </root>
-            |        </javadocPath>
-            |      </roots>
-            |      <additional sdk="Jbr">
-            |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
-            |      </additional>
-            |    </jdk>"""
-
-      val table =
-        st"""<application>
-            |  <component name="ProjectJdkTable">
-            |    <jdk version="2">
-            |      <name value="Java" />
-            |      <type value="JavaSDK" />
-            |      <version value="$javaVersion" />
-            |      <homePath value="$javaHome" />
-            |      <roots>
-            |        <annotationsPath>
-            |          <root type="composite">
-            |            <root url="jar://$$APPLICATION_HOME_DIR$$/lib/jdkAnnotations.jar!/" type="simple" />
-            |          </root>
-            |        </annotationsPath>
-            |        <classPath>
-            |          <root type="composite">
-            |${(jdkClassPath, "\n")}
-            |          </root>
-            |        </classPath>
-            |        <javadocPath>
-            |          <root type="composite">
-            |            <root url="https://docs.oracle.com/en/java/javase/16/docs/api/" type="simple" />
-            |          </root>
-            |        </javadocPath>
-            |        <sourcePath>
-            |          <root type="composite">
-            |${(jdkSourcePath, "\n")}
-            |          </root>
-            |        </sourcePath>
-            |      </roots>
-            |      <additional />
-            |    </jdk>
-            |    <jdk version="2">
-            |      <name value="Jbr" />
-            |      <type value="JavaSDK" />
-            |      <version value="$jbrVersion" />
-            |      <homePath value="$jbrHome" />
-            |      <roots>
-            |        <annotationsPath>
-            |          <root type="composite">
-            |            <root url="jar://$$APPLICATION_HOME_DIR$$/lib/jdkAnnotations.jar!/" type="simple" />
-            |          </root>
-            |        </annotationsPath>
-            |        <classPath>
-            |          <root type="composite">
-            |${(jbrClassPath, "\n")}
-            |          </root>
-            |        </classPath>
-            |        <javadocPath>
-            |          <root type="composite">
-            |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
-            |          </root>
-            |        </javadocPath>
-            |        <sourcePath>
-            |          <root type="composite" />
-            |        </sourcePath>
-            |      </roots>
-            |      <additional />
-            |    </jdk>
-            |$idea
-            |$ideaScala
-            |  </component>
-            |</application>"""
-
-      xml.writeOver(table.render)
-      println(s"Wrote $xml")
+    if (fresh) {
+      projectOutDir.removeAll()
     }
+    projectOutDir.mkdirAll()
 
-    def writeFileTypes(xml: Os.Path): Unit = {
-      xml.writeOver(
-        st"""<application>
-            |  <component name="FileTypeManager" version="17">
-            |    <extensionMap>
-            |      <mapping ext="cmd" type="Scala" />
-            |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
-            |    </extensionMap>
-            |  </component>
-            |</application>""".render
-      )
-      println(s"Wrote $xml")
+    var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
+    var compiledModuleIds = HashSet.empty[String]
+    while (modules.nonEmpty) {
+      var nexts = ISZ[(Module, B)]()
+      var newModules = HashSMap.empty[String, B]
+      for (p <- modules) {
+        val m = dm.getModule(p._1)
+        if (ops.ISZOps(m.deps).forall((mDep: String) => compiledModuleIds.contains(mDep))) {
+          nexts = nexts :+ ((m, p._2))
+        } else {
+          newModules = newModules + p
+        }
+      }
+      val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
+      println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")}".render)
+      val r: ISZ[(CompileStatus.Type, String)] =
+        if (par) ops.ISZOps(nexts).mParMap(compileModule _) else for (next <- nexts) yield compileModule(next)
+      var ok = T
+      for (p <- r) {
+        if (p._1 == CompileStatus.Error) {
+          ok = F
+        }
+        print(p._2)
+      }
+      if (!ok) {
+        return -1
+      }
+      for (p <- ops.ISZOps(nextIds).zip(r)) {
+        val (mid, (status, _)) = p
+        for (mDep <- project.poset.childrenOf(mid).elements) {
+          val compile: B = status == CompileStatus.Compiled
+          newModules.get(mDep) match {
+            case Some(b) => newModules = newModules + mDep ~> (b | compile)
+            case _ => newModules = newModules + mDep ~> compile
+          }
+        }
+      }
+
+      println()
+      compiledModuleIds = compiledModuleIds ++ nextIds
+      modules = newModules.entries
     }
-
-    val configOptions: Os.Path =
-      if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$devSuffix" / "options"
-      else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
-    configOptions.mkdirAll()
-
-
-    val jdkTableXml = configOptions / "jdk.table.xml"
-    if (force || !jdkTableXml.exists) {
-      writeJdkTable(jdkTableXml)
-    }
-
-    val fileTypesXml = configOptions / "filetypes.xml"
-    if (force || !fileTypesXml.exists) {
-      writeFileTypes(fileTypesXml)
-    }
-
-    (Os.home / s".SireumIVE$devSuffix-sandbox").mkdirAll()
-  }
-
-  def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
-    val f = dotIdea / "misc.xml"
-    f.writeOver(
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project version="4">
-          |  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="Java" project-jdk-type="JavaSDK">
-          |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
-          |  </component>
-          |</project>
-          |""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeCompiler(dotIdea: Os.Path): Unit = {
-    val f = dotIdea / "compiler.xml"
-    f.writeOver(
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project version="4">
-          |  <component name="CompilerConfiguration">
-          |    <option name="USE_RELEASE_OPTION" value="false" />
-          |  </component>
-          |</project>
-          |""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
-    val f = dotIdea / "scala_compiler.xml"
-    f.writeOver(
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project version="4">
-          |  <component name="ScalaCompilerConfiguration">
-          |    <option name="postfixOps" value="true" />
-          |    <option name="deprecationWarnings" value="true" />
-          |    <option name="uncheckedWarnings" value="true" />
-          |    <option name="featureWarnings" value="true" />
-          |    <parameters>
-          |      <parameter value="-target:jvm-1.8" />
-          |      <parameter value="-Yrangepos" />
-          |      <parameter value="-Ydelambdafy:method" />
-          |      <parameter value="-Xfatal-warnings" />
-          |    </parameters>
-          |    <plugins>
-          |      <plugin path="$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}" />
-          |    </plugins>
-          |  </component>
-          |</project>
-          |""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeScalaSettings(dotIdea: Os.Path): Unit = {
-    val f = dotIdea / "scala_settings.xml"
-    f.writeOver(
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project version="4">
-          |  <component name="ScalaProjectSettings">
-          |    <option name="autoRunDelay" value="3000" />
-          |    <option name="dontCacheCompoundTypes" value="true" />
-          |    <option name="inProcessMode" value="false" />
-          |    <option name="intInjectionMapping">
-          |      <map>
-          |        <entry key="xml" value="XML" />
-          |      </map>
-          |    </option>
-          |    <option name="metaTrimMethodBodies" value="false" />
-          |    <option name="scFileMode" value="Ammonite" />
-          |    <option name="scalaMetaMode" value="Disabled" />
-          |    <option name="showNotFoundImplicitArguments" value="false" />
-          |    <option name="treatDocCommentAsBlockComment" value="true" />
-          |    <option name="treatScratchFilesAsWorksheet" value="false" />
-          |  </component>
-          |</project>""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeInspectionProfiles(dotIdea: Os.Path): Unit = {
-    val inspectionProfiles = dotIdea / "inspectionProfiles"
-    inspectionProfiles.mkdirAll()
-    val f = inspectionProfiles / "Project_Default.xml"
-    f.writeOver(
-      st"""<component name="InspectionProjectProfileManager">
-          |  <profile version="1.0">
-          |    <option name="myName" value="Project Default" />
-          |    <inspection_tool class="ComparingUnrelatedTypes" enabled="false" level="WARNING" enabled_by_default="false" />
-          |    <inspection_tool class="ConvertibleToMethodValue" enabled="false" level="WARNING" enabled_by_default="false" />
-          |    <inspection_tool class="RemoveRedundantReturn" enabled="false" level="WARNING" enabled_by_default="false" />
-          |  </profile>
-          |</component>
-          |""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeUiDesigner(dotIdea: Os.Path): Unit = {
-    val f = dotIdea / "uiDesigner.xml"
-    f.writeOver(
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project version="4">
-          |  <component name="uidesigner-configuration">
-          |    <option name="INSTRUMENT_CLASSES" value="true" />
-          |  </component>
-          |</project>
-          |""".render
-    )
-    println(s"Wrote $f")
-  }
-
-  def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
-    val runConfigurations = dotIdea / "runConfigurations"
-    runConfigurations.mkdirAll()
-
-    val f = runConfigurations / "Slang_Script_Runner.xml"
-    f.writeOver(
-      st"""<component name="ProjectRunConfigurationManager">
-          |  <configuration default="false" name="Slang Script Runner" type="Application" factoryName="Application" singleton="false">
-          |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
-          |    <module name="$name" />
-          |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
-          |    <method v="2" />
-          |  </configuration>
-          |</component>
-          |""".render
-    )
-    println(s"Wrote $f")
+    return 0
   }
 
   def ive(path: Os.Path,
@@ -478,8 +421,7 @@ object Proyek {
     val dotIdea = path / ".idea"
     dotIdea.mkdirAll()
 
-    val ivyDeps = collectIvyDeps(versions, project)
-    val libMap = buildLibMap(ivyDeps.values, withSource, withDoc)
+    val dm = DependencyManager(project, HashSMap ++ versions.entries, withSource, withDoc)
 
     def writeLibraries(): Unit = {
       val ideaLib = dotIdea / "libraries"
@@ -518,7 +460,7 @@ object Proyek {
         println(s"Wrote $f")
       }
 
-      for (lib <- libMap.values) {
+      for (lib <- dm.libMap.values) {
         writeLibrary(lib)
       }
 
@@ -572,28 +514,6 @@ object Proyek {
       }
     }
 
-    var tidsCache = HashSMap.empty[String, HashSSet[String]]
-    def computeTransitiveIvyDeps(m: Module): ISZ[String] = {
-      tidsCache.get(m.id) match {
-        case Some(r) => return r.elements
-        case _ =>
-      }
-      var r = HashSSet.empty[String]
-      for (mid <- m.deps) {
-        r = r ++ computeTransitiveIvyDeps(project.modules.get(mid).get)
-      }
-      for (id <- m.ivyDeps) {
-        r = r + ivyDeps.get(id).get
-        val idOps = ops.StringOps(id)
-        if (idOps.endsWith("::")) {
-          val dep = s"${idOps.substring(0, id.size - 2)}$sjsSuffix:"
-          r = r + ivyDeps.get(dep).get
-        }
-      }
-      tidsCache = tidsCache + m.id ~> r
-      return r.elements
-    }
-
     def writeModules(): Unit = {
       val dotIdeaModules = path / ".idea_modules"
       dotIdeaModules.mkdirAll()
@@ -617,8 +537,8 @@ object Proyek {
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$src"))}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- m.testResources) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$rsc"))}" type="java-test-resource" />"""
-        val libs: ISZ[ST] = for (cif <- Coursier.fetch(computeTransitiveIvyDeps(m)) if !ignoredLibraryNames.contains(libName(cif))) yield
-          st"""<orderEntry type="library" name="${libName(cif)}" level="project" />"""
+        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
+          st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
         val st =
           st"""<?xml version="1.0" encoding="UTF-8"?>
               |<module type="JAVA_MODULE" version="4">
@@ -698,15 +618,382 @@ object Proyek {
 
     writeLibraries()
     writeModules()
-    writeMisc(dotIdea, outDirName)
-    writeCompiler(dotIdea)
-    writeScalaCompiler(dotIdea, scalacPlugin)
-    writeScalaSettings(dotIdea)
-    writeInspectionProfiles(dotIdea)
-    writeUiDesigner(dotIdea)
-    writeScriptRunner(dotIdea, projectName)
-    writeApplicationConfigs(force, ideaDir, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeMisc(dotIdea, outDirName)
+    IVE.writeCompiler(dotIdea)
+    IVE.writeScalaCompiler(dotIdea, scalacPlugin)
+    IVE.writeScalaSettings(dotIdea)
+    IVE.writeInspectionProfiles(dotIdea)
+    IVE.writeUiDesigner(dotIdea)
+    IVE.writeScriptRunner(dotIdea, projectName)
+    IVE.writeApplicationConfigs(force, ideaDir, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
 
     return 0
   }
+
+  @strictpure def libName(cif: CoursierFileInfo): String = s"${cif.org}.${cif.module}"
+
+  @pure def buildClassifiers(withSource: B, withDoc: B): ISZ[CoursierClassifier.Type] = {
+    var classifiers = ISZ[CoursierClassifier.Type](CoursierClassifier.Default)
+    if (withSource) {
+      classifiers = classifiers :+ CoursierClassifier.Sources
+    }
+    if (withDoc) {
+      classifiers = classifiers :+ CoursierClassifier.Javadoc
+    }
+    return classifiers
+  }
+
+  @pure def normalizePath(path: String): String = {
+    if (Os.isWin) {
+      return path
+    } else {
+      return ops.StringOps(path).replaceAllChars('\\', '/')
+    }
+  }
+
+  @strictpure def relUri(from: Os.Path, to: Os.Path): String = normalizePath(from.relativize(to).string)
+
+  object IVE {
+
+    def writeApplicationConfigs(force: B,
+                                ideaDir:
+                                Os.Path,
+                                javaHome: Os.Path,
+                                javaVersion: String,
+                                jbrVersion: String,
+                                devSuffix: String): Unit = {
+
+      def writeJdkTable(xml: Os.Path): Unit = {
+
+        val jbrHome: Os.Path = if (Os.isMac) ideaDir / "jbr" / "Contents" / "Home" else ideaDir / "jbr"
+
+        val jdkModules: Set[String] = Set ++ (for (p <- (javaHome / "jmods").list if p.ext === "jmod") yield
+          ops.StringOps(p.name).substring(0, p.name.size - 5)
+          )
+
+        val jbrModules: Set[String] = Set ++ ISZ(
+          "gluegen.rt", "java.base", "java.compiler", "java.datatransfer", "java.desktop", "java.instrument",
+          "java.logging", "java.management", "java.management.rmi", "java.naming", "java.net.http", "java.prefs",
+          "java.rmi", "java.scripting", "java.se", "java.security.jgss", "java.security.sasl", "java.smartcardio",
+          "java.sql", "java.sql.rowset", "java.transaction.xa", "java.xml", "java.xml.crypto", "jcef",
+          "jdk.accessibility", "jdk.aot", "jdk.attach", "jdk.charsets", "jdk.compiler", "jdk.crypto.cryptoki",
+          "jdk.crypto.ec", "jdk.dynalink", "jdk.hotspot.agent", "jdk.httpserver", "jdk.internal.ed",
+          "jdk.internal.jvmstat", "jdk.internal.le", "jdk.internal.vm.ci", "jdk.internal.vm.compiler",
+          "jdk.internal.vm.compiler.management", "jdk.jdi", "jdk.jdwp.agent", "jdk.jfr", "jdk.jsobject",
+          "jdk.localedata", "jdk.management", "jdk.management.agent", "jdk.management.jfr", "jdk.naming.dns",
+          "jdk.naming.rmi", "jdk.net", "jdk.pack", "jdk.scripting.nashorn", "jdk.scripting.nashorn.shell",
+          "jdk.sctp", "jdk.security.auth", "jdk.security.jgss", "jdk.unsupported", "jdk.xml.dom", "jdk.zipfs",
+          "jogl.all"
+        )
+
+        val ideaLibDir = ideaDir / "lib"
+        val ideaPluginsDir = ideaDir / "plugins"
+
+        val (jdkClassPath, jdkSourcePath): (ISZ[ST], ISZ[ST]) =
+          ( for (m <- jdkModules.elements) yield
+            st"""            <root url="jrt://${normalizePath(javaHome.string)}!/$m" type="simple" />""",
+            for (m <- jdkModules.elements) yield
+              st"""            <root url="jar://${normalizePath(javaHome.string)}/lib/src.zip!/$m" type="simple" />""")
+        val jbrClassPath: ISZ[ST] = for (m <- jbrModules.elements) yield
+          st"""            <root url="jrt://${normalizePath(jbrHome.string)}!/$m" type="simple" />"""
+        val ideaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaLibDir, F, T, f => ops.StringOps(f.string).endsWith(".jar")))
+          yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
+        val ideaJavaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaPluginsDir / "java" / "lib", F, T, f => ops.StringOps(f.string).endsWith(".jar")))
+          yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
+        val ideaScalaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaPluginsDir / "Scala" / "lib", F, T, f => ops.StringOps(f.string).endsWith(".jar")))
+          yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
+
+        val idea =
+          st"""    <jdk version="2">
+              |      <name value="Sireum$devSuffix" />
+              |      <type value="IDEA JDK" />
+              |      <version value="$jbrVersion" />
+              |      <homePath value="$ideaDir" />
+              |      <roots>
+              |        <annotationsPath>
+              |          <root type="composite">
+              |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/java/lib/jdkAnnotations.jar!/" type="simple" />
+              |          </root>
+              |        </annotationsPath>
+              |        <classPath>
+              |          <root type="composite">
+              |${(jbrClassPath, "\n")}
+              |${(ideaLibs, "\n")}
+              |          </root>
+              |        </classPath>
+              |        <javadocPath>
+              |          <root type="composite">
+              |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
+              |          </root>
+              |        </javadocPath>
+              |      </roots>
+              |      <additional sdk="Jbr">
+              |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
+              |      </additional>
+              |    </jdk>"""
+
+
+        val ideaScala =
+          st"""    <jdk version="2">
+              |      <name value="Sireum$devSuffix (with Scala Plugin)" />
+              |      <type value="IDEA JDK" />
+              |      <version value="$jbrVersion" />
+              |      <homePath value="$ideaDir" />
+              |      <roots>
+              |        <annotationsPath>
+              |          <root type="composite" />
+              |        </annotationsPath>
+              |        <classPath>
+              |          <root type="composite">
+              |${(jbrClassPath, "\n")}
+              |${(ideaLibs, "\n")}
+              |${(ideaJavaLibs, "\n")}
+              |${(ideaScalaLibs, "\n")}
+              |          </root>
+              |        </classPath>
+              |        <javadocPath>
+              |          <root type="composite">
+              |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
+              |          </root>
+              |        </javadocPath>
+              |      </roots>
+              |      <additional sdk="Jbr">
+              |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
+              |      </additional>
+              |    </jdk>"""
+
+        val table =
+          st"""<application>
+              |  <component name="ProjectJdkTable">
+              |    <jdk version="2">
+              |      <name value="Java" />
+              |      <type value="JavaSDK" />
+              |      <version value="$javaVersion" />
+              |      <homePath value="$javaHome" />
+              |      <roots>
+              |        <annotationsPath>
+              |          <root type="composite">
+              |            <root url="jar://$$APPLICATION_HOME_DIR$$/lib/jdkAnnotations.jar!/" type="simple" />
+              |          </root>
+              |        </annotationsPath>
+              |        <classPath>
+              |          <root type="composite">
+              |${(jdkClassPath, "\n")}
+              |          </root>
+              |        </classPath>
+              |        <javadocPath>
+              |          <root type="composite">
+              |            <root url="https://docs.oracle.com/en/java/javase/16/docs/api/" type="simple" />
+              |          </root>
+              |        </javadocPath>
+              |        <sourcePath>
+              |          <root type="composite">
+              |${(jdkSourcePath, "\n")}
+              |          </root>
+              |        </sourcePath>
+              |      </roots>
+              |      <additional />
+              |    </jdk>
+              |    <jdk version="2">
+              |      <name value="Jbr" />
+              |      <type value="JavaSDK" />
+              |      <version value="$jbrVersion" />
+              |      <homePath value="$jbrHome" />
+              |      <roots>
+              |        <annotationsPath>
+              |          <root type="composite">
+              |            <root url="jar://$$APPLICATION_HOME_DIR$$/lib/jdkAnnotations.jar!/" type="simple" />
+              |          </root>
+              |        </annotationsPath>
+              |        <classPath>
+              |          <root type="composite">
+              |${(jbrClassPath, "\n")}
+              |          </root>
+              |        </classPath>
+              |        <javadocPath>
+              |          <root type="composite">
+              |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
+              |          </root>
+              |        </javadocPath>
+              |        <sourcePath>
+              |          <root type="composite" />
+              |        </sourcePath>
+              |      </roots>
+              |      <additional />
+              |    </jdk>
+              |$idea
+              |$ideaScala
+              |  </component>
+              |</application>"""
+
+        xml.writeOver(table.render)
+        println(s"Wrote $xml")
+      }
+
+      def writeFileTypes(xml: Os.Path): Unit = {
+        xml.writeOver(
+          st"""<application>
+              |  <component name="FileTypeManager" version="17">
+              |    <extensionMap>
+              |      <mapping ext="cmd" type="Scala" />
+              |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
+              |    </extensionMap>
+              |  </component>
+              |</application>""".render
+        )
+        println(s"Wrote $xml")
+      }
+
+      val configOptions: Os.Path =
+        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$devSuffix" / "options"
+        else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
+      configOptions.mkdirAll()
+
+
+      val jdkTableXml = configOptions / "jdk.table.xml"
+      if (force || !jdkTableXml.exists) {
+        writeJdkTable(jdkTableXml)
+      }
+
+      val fileTypesXml = configOptions / "filetypes.xml"
+      if (force || !fileTypesXml.exists) {
+        writeFileTypes(fileTypesXml)
+      }
+
+      (Os.home / s".SireumIVE$devSuffix-sandbox").mkdirAll()
+    }
+
+    def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
+      val f = dotIdea / "misc.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="Java" project-jdk-type="JavaSDK">
+            |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
+            |  </component>
+            |</project>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeCompiler(dotIdea: Os.Path): Unit = {
+      val f = dotIdea / "compiler.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="CompilerConfiguration">
+            |    <option name="USE_RELEASE_OPTION" value="false" />
+            |  </component>
+            |</project>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
+      val f = dotIdea / "scala_compiler.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="ScalaCompilerConfiguration">
+            |    <option name="postfixOps" value="true" />
+            |    <option name="deprecationWarnings" value="true" />
+            |    <option name="uncheckedWarnings" value="true" />
+            |    <option name="featureWarnings" value="true" />
+            |    <parameters>
+            |      <parameter value="-target:jvm-1.8" />
+            |      <parameter value="-Yrangepos" />
+            |      <parameter value="-Ydelambdafy:method" />
+            |      <parameter value="-Xfatal-warnings" />
+            |    </parameters>
+            |    <plugins>
+            |      <plugin path="$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}" />
+            |    </plugins>
+            |  </component>
+            |</project>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeScalaSettings(dotIdea: Os.Path): Unit = {
+      val f = dotIdea / "scala_settings.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="ScalaProjectSettings">
+            |    <option name="autoRunDelay" value="3000" />
+            |    <option name="dontCacheCompoundTypes" value="true" />
+            |    <option name="inProcessMode" value="false" />
+            |    <option name="intInjectionMapping">
+            |      <map>
+            |        <entry key="xml" value="XML" />
+            |      </map>
+            |    </option>
+            |    <option name="metaTrimMethodBodies" value="false" />
+            |    <option name="scFileMode" value="Ammonite" />
+            |    <option name="scalaMetaMode" value="Disabled" />
+            |    <option name="showNotFoundImplicitArguments" value="false" />
+            |    <option name="treatDocCommentAsBlockComment" value="true" />
+            |    <option name="treatScratchFilesAsWorksheet" value="false" />
+            |  </component>
+            |</project>""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeInspectionProfiles(dotIdea: Os.Path): Unit = {
+      val inspectionProfiles = dotIdea / "inspectionProfiles"
+      inspectionProfiles.mkdirAll()
+      val f = inspectionProfiles / "Project_Default.xml"
+      f.writeOver(
+        st"""<component name="InspectionProjectProfileManager">
+            |  <profile version="1.0">
+            |    <option name="myName" value="Project Default" />
+            |    <inspection_tool class="ComparingUnrelatedTypes" enabled="false" level="WARNING" enabled_by_default="false" />
+            |    <inspection_tool class="ConvertibleToMethodValue" enabled="false" level="WARNING" enabled_by_default="false" />
+            |    <inspection_tool class="RemoveRedundantReturn" enabled="false" level="WARNING" enabled_by_default="false" />
+            |  </profile>
+            |</component>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeUiDesigner(dotIdea: Os.Path): Unit = {
+      val f = dotIdea / "uiDesigner.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="uidesigner-configuration">
+            |    <option name="INSTRUMENT_CLASSES" value="true" />
+            |  </component>
+            |</project>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
+      val runConfigurations = dotIdea / "runConfigurations"
+      runConfigurations.mkdirAll()
+
+      val f = runConfigurations / "Slang_Script_Runner.xml"
+      f.writeOver(
+        st"""<component name="ProjectRunConfigurationManager">
+            |  <configuration default="false" name="Slang Script Runner" type="Application" factoryName="Application" singleton="false">
+            |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
+            |    <module name="$name" />
+            |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
+            |    <method v="2" />
+            |  </configuration>
+            |</component>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+  }
+
 }
