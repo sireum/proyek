@@ -693,15 +693,10 @@ object Proyek {
            project: Project,
            projectName: String,
            dm: DependencyManager,
-           javaHome: Os.Path,
-           par: B,
            names: ISZ[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName)
     val projectOutDir = proyekDir / "modules"
-
-    val classpath: ISZ[String] =
-      for (cif <- Coursier.fetch(ISZ(s"org.scalatest::scalatest::${dm.versions.get("org.scalatest%%scalatest%%").get}"))) yield cif.path.string
 
     var testClasspath = ISZ[String]()
 
@@ -723,12 +718,9 @@ object Proyek {
     }
 
     var args = ISZ[String](
-      "-o",
+      "-oF", "-P1",
       "-R", st"""${(testClasspath, " ")}""".render
     )
-    if (par) {
-      args = args :+ "-P"
-    }
     args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
 
     Ext.test(args)
