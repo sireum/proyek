@@ -787,7 +787,19 @@ object Proyek {
                                 jbrVersion: String,
                                 devSuffix: String): Unit = {
 
-      def writeJdkTable(xml: Os.Path): Unit = {
+      val configOptions: Os.Path =
+        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$devSuffix" / "options"
+        else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
+      val configColors = (configOptions.up / "colors").canon
+      configOptions.mkdirAll()
+      configColors.mkdirAll()
+
+      def writeJdkTable(): Unit = {
+
+        val jdkTableXml = configOptions / "jdk.table.xml"
+        if (!force && jdkTableXml.exists) {
+          return
+        }
 
         val jbrHome: Os.Path = if (Os.isMac) ideaDir / "jbr" / "Contents" / "Home" else ideaDir / "jbr"
 
@@ -950,12 +962,16 @@ object Proyek {
               |  </component>
               |</application>"""
 
-        xml.writeOver(table.render)
-        println(s"Wrote $xml")
+        jdkTableXml.writeOver(table.render)
+        println(s"Wrote $jdkTableXml")
       }
 
-      def writeFileTypes(xml: Os.Path): Unit = {
-        xml.writeOver(
+      def writeFileTypes(): Unit = {
+        val fileTypesXml = configOptions / "filetypes.xml"
+        if (!force && fileTypesXml.exists) {
+          return
+        }
+        fileTypesXml.writeOver(
           st"""<application>
               |  <component name="FileTypeManager" version="17">
               |    <extensionMap>
@@ -965,24 +981,34 @@ object Proyek {
               |  </component>
               |</application>""".render
         )
-        println(s"Wrote $xml")
+        println(s"Wrote $fileTypesXml")
       }
 
-      val configOptions: Os.Path =
-        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$devSuffix" / "options"
-        else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
-      configOptions.mkdirAll()
-
-
-      val jdkTableXml = configOptions / "jdk.table.xml"
-      if (force || !jdkTableXml.exists) {
-        writeJdkTable(jdkTableXml)
+      def writeColors(): Unit = {
+        for (name <- ISZ[String]("Darcula", "Default")) {
+          val f = configColors / s"_@user_$name.icls"
+          if (!force && f.exists) {
+            return
+          }
+          f.writeOver(
+            st"""<scheme name="_@user_$name" version="142" parent_scheme="$name">
+                |  <attributes>
+                |    <option name="DEPRECATED_ATTRIBUTES">
+                |      <value>
+                |        <option name="EFFECT_TYPE" value="3" />
+                |      </value>
+                |    </option>
+                |  </attributes>
+                |</scheme>
+                |""".render
+          )
+          println(s"Wrote $f")
+        }
       }
 
-      val fileTypesXml = configOptions / "filetypes.xml"
-      if (force || !fileTypesXml.exists) {
-        writeFileTypes(fileTypesXml)
-      }
+      writeJdkTable()
+      writeFileTypes()
+      writeColors()
 
       (Os.home / s".SireumIVE$devSuffix-sandbox").mkdirAll()
     }
