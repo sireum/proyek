@@ -26,11 +26,17 @@ val proyek = "proyek"
 
 val homeDir = Os.slashDir.up.canon
 
-val proyekJvm = moduleJvm(
+val proyekJvm = moduleJvmPub(
   id = proyek,
   baseDir = homeDir,
   jvmDeps = ISZ(library),
-  jvmIvyDeps = ISZ("org.ow2.asm:asm:")
+  jvmIvyDeps = ISZ("org.ow2.asm:asm:"),
+  pubOpt = pub(
+    desc = "Sireum Proyek",
+    url = "github.com/sireum/proyek",
+    licenses = org.sireum.project.ProjectUtil.bsd2,
+    devs = ISZ(robby)
+  )
 )
 
 val project = Project.empty + proyekJvm
