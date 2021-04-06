@@ -108,7 +108,7 @@ object Proyek {
     var dLibMap: HashMap[String, ISZ[Lib]] = HashMap.empty
 
     @pure def getVersion(ivyDep: String): String = {
-      versions.get(ops.StringOps(ivyDep).replaceAllChars(':', '%'))match {
+      versions.get(ops.StringOps(ivyDep).replaceAllChars(':', '%')) match {
         case Some(v) => return v
         case _ => halt(s"Could not find version information for '$ivyDep' in $versions")
       }
@@ -178,11 +178,17 @@ object Proyek {
   val ignoredLibraryNames: HashSet[String] = HashSet ++ ISZ[String](
     "org.scala-lang.scala-library", "org.scala-lang.scala-reflect", "org.scala-lang.scala-compiler"
   )
+  val ignoredPathNames: HashSet[String] = HashSet ++ ISZ[String](
+    ".git", ".DS_Store"
+  )
   val cacheSuffix: String = "-inc-cache.zip"
   val mainOutDirName: String = "classes"
   val mainCacheName: String = s"$mainOutDirName$cacheSuffix"
   val testOutDirName: String = "test-classes"
   val testCacheName: String = s"$testOutDirName$cacheSuffix"
+  val sourcesOutDirName: String = "sources"
+  val metaInf: String = "META-INF"
+  val manifestMf: String = "MANIFEST.MF"
 
 
   def assemble(path: Os.Path,
@@ -209,7 +215,7 @@ object Proyek {
     contentDir.removeAll()
     contentDir.mkdirAll()
 
-    val metaDir = contentDir / "META-INF"
+    val metaDir = contentDir / metaInf
     metaDir.mkdirAll()
 
     (scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
@@ -226,7 +232,7 @@ object Proyek {
       }
     }
 
-    val manifest = metaDir / "MANIFEST.MF"
+    val manifest = metaDir / manifestMf
     val mainOpt: Option[ST] = mainClassNameOpt.map((mainClassName: String) => st"Main-Class: $mainClassName")
     manifest.writeOver(
       st"""Manifest-Version: 1.0
@@ -298,9 +304,11 @@ object Proyek {
     def compileModule(pair: (Module, B)): (CompileStatus.Type, String) = {
 
       @strictpure def isJavaOrScala(p: Os.Path): B = p.ext == "scala" || p.ext == "java"
+
       def findSources(p: Os.Path): ISZ[Os.Path] = {
         return if (p.exists) for (p <- Os.Path.walk(p, F, followSymLink, isJavaOrScala _)) yield p else ISZ()
       }
+
       @pure def fingerprint(p: Os.Path): String = {
         if (sha3) {
           val sha = crypto.SHA3.init256
@@ -330,7 +338,7 @@ object Proyek {
         if (par && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
           mParMap((p: Os.Path) => (path.relativize(p).string, fingerprint(p)))
         else (for (p <- sourceFiles ++ testSourceFiles) yield (path.relativize(p).string, fingerprint(p)))
-      )
+        )
 
       val fileTimestampCache = projectOutDir / s"${m.id}${if (sha3) ".sha3" else ""}.json"
 
@@ -347,7 +355,7 @@ object Proyek {
         classpath = classpath ++ (
           for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / mainOutDirName).exists) yield
             projectOutDir / mDep / mainOutDirName
-        )
+          )
 
         val mainOutDir = projectOutDir / m.id / mainOutDirName
         classpath = mainOutDir +: classpath
@@ -372,7 +380,7 @@ object Proyek {
             classpath = classpath ++ (
               for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / testOutDirName).exists) yield
                 projectOutDir / mDep / testOutDirName
-            )
+              )
             classpath = testOutDir +: classpath
             testOutDir.removeAll()
             testOutDir.mkdirAll()
@@ -434,8 +442,9 @@ object Proyek {
       }
       val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
       println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
-      val r: ISZ[(CompileStatus.Type, String)] =
-        if (par) ops.ISZOps(nexts).mParMap(compileModule _) else for (next <- nexts) yield compileModule(next)
+      val r: ISZ[(Proyek.CompileStatus.Type, String)] =
+        if (par) ops.ISZOps(nexts).mParMap(compileModule _)
+        else for (next <- nexts) yield compileModule(next)
       var ok = T
       for (p <- r) {
         if (p._1 == CompileStatus.Error) {
@@ -522,9 +531,8 @@ object Proyek {
 
       for (lib <- dm.libMap.values) {
         writeLibrary(lib)
-      }
-
-      ;{
+      };
+      {
         val f = ideaLib / "Sireum.xml"
         f.writeOver(
           st"""<component name="libraryTable">
@@ -539,9 +547,8 @@ object Proyek {
               |""".render
         )
         println(s"Wrote $f")
-      }
-
-      ;{
+      };
+      {
         val scalaLibrary = relUri(Os.home, scalaHome / "lib" / "scala-library.jar")
         val scalaCompiler = relUri(Os.home, scalaHome / "lib" / "scala-compiler.jar")
         val scalaReflect = relUri(Os.home, scalaHome / "lib" / "scala-reflect.jar")
@@ -635,9 +642,8 @@ object Proyek {
           newModuleIds = newModuleIds ++ project.poset.childrenOf(mid).elements
         }
         moduleIds = newModuleIds.elements
-      }
-
-      ;{
+      };
+      {
         val f = dotIdeaModules / s"$projectName.iml"
         f.writeOver(
           st"""<?xml version="1.0" encoding="UTF-8"?>
@@ -657,9 +663,8 @@ object Proyek {
       }
 
       moduleEntries = moduleEntries :+
-        st"""<module fileurl="file://$$PROJECT_DIR$$/.idea_modules/$projectName.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea_modules${Os.fileSep}$projectName.iml" />"""
-
-      ;{
+        st"""<module fileurl="file://$$PROJECT_DIR$$/.idea_modules/$projectName.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea_modules${Os.fileSep}$projectName.iml" />""";
+      {
         val f = dotIdea / "modules.xml"
         f.writeOver(
           st"""<?xml version="1.0" encoding="UTF-8"?>
@@ -686,6 +691,148 @@ object Proyek {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, projectName)
     IVE.writeApplicationConfigs(force, ideaDir, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
+
+    return 0
+  }
+
+  def publish(path: Os.Path,
+              outDirName: String,
+              project: Project,
+              projectName: String,
+              dm: DependencyManager,
+              orgName: ISZ[String],
+              m2Repo: Os.Path,
+              version: String,
+              scalaMajorVersion: String,
+              symlink: B): Z = {
+
+    @strictpure def shouldCopy(p: Os.Path): B = !ignoredPathNames.contains(p.name)
+
+    val m2Base = m2Repo /+ orgName
+    m2Base.mkdirAll()
+
+    val proyekDir = getProyekDir(path, outDirName, projectName)
+
+    val projectOutDir = proyekDir / "modules"
+
+    for (m <- project.modules.values if m.publishInfoOpt.nonEmpty) {
+
+      val mOutDir = projectOutDir / m.id
+
+      val org = st"${(orgName, ".")}".render
+      val module = s"${m.id}_$scalaMajorVersion"
+
+      def writeMainJar(): Unit = {
+        val mOutMainDir = mOutDir / mainOutDirName
+
+        val mainMetaInf = mOutMainDir / metaInf / manifestMf
+        mainMetaInf.up.mkdirAll()
+        mainMetaInf.writeOver(
+          st"""Manifest-Version: 1.0
+              |Created-By: Sireum Proyek
+              |""".render
+        )
+
+        val m2MainJar = m2Base / module / version / s"$module-$version.jar"
+        m2MainJar.up.mkdirAll()
+        mOutMainDir.zipTo(m2MainJar)
+        println(s"Wrote $m2MainJar")
+
+        val m2MainJarSha1 = (m2MainJar.up / s"${m2MainJar.name}.sha1").canon
+        m2MainJarSha1.writeOver(m2MainJar.sha1)
+        println(s"Wrote $m2MainJarSha1")
+
+        val m2MainJarMd5 = (m2MainJar.up / s"${m2MainJar.name}.md5").canon
+        m2MainJarMd5.writeOver(m2MainJar.md5)
+        println(s"Wrote $m2MainJarMd5")
+      }
+
+      def writeSourcesJar(): Unit = {
+        val mOutSourcesDir = mOutDir / sourcesOutDirName
+
+        var base = m.basePath
+        m.subPathOpt match {
+          case Some(subPath) => base = s"$base$subPath"
+          case _ =>
+        }
+
+        for (source <- m.sources) {
+          val sourcePath = Os.path(s"$base$source")
+          sourcePath.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
+        }
+
+        for (resource <- m.resources) {
+          val resourcePath = Os.path(s"$base$resource")
+          resourcePath.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
+        }
+
+        val sourcesMetaInf = mOutSourcesDir / metaInf / manifestMf
+        sourcesMetaInf.up.mkdirAll()
+        sourcesMetaInf.writeOver(
+          st"""Manifest-Version: 1.0
+              |Created-By: Sireum Proyek
+              |""".render
+        )
+
+        val m2SourcesJar = m2Base / module / version / s"$module-$version-sources.jar"
+        m2SourcesJar.up.mkdirAll()
+        mOutSourcesDir.zipTo(m2SourcesJar)
+        println(s"Wrote $m2SourcesJar")
+
+        val m2SourcesJarSha1 = (m2SourcesJar.up / s"${m2SourcesJar.name}.sha1").canon
+        m2SourcesJarSha1.writeOver(m2SourcesJar.sha1)
+        println(s"Wrote $m2SourcesJarSha1")
+
+        val m2SourcesJarMd5 = (m2SourcesJar.up / s"${m2SourcesJar.name}.md5").canon
+        m2SourcesJarMd5.writeOver(m2SourcesJar.md5)
+        println(s"Wrote $m2SourcesJarMd5")
+      }
+
+      def writePom(): Unit = {
+        var deps = ISZ[ST]()
+
+        for (mDep <- m.deps) {
+          deps = deps :+ PomTemplate.dep(org, s"${mDep}_$scalaMajorVersion", version)
+        }
+
+        for (ivyDep <- m.ivyDeps) {
+          val cif = Coursier.fetch(ISZ(dm.ivyDeps.get(ivyDep).get))(0)
+          deps = deps :+ PomTemplate.dep(cif.org, cif.module, cif.version)
+        }
+
+        val m2Pom = m2Base / module / version / s"$module-$version.pom"
+        m2Pom.up.mkdirAll()
+
+        val pi = m.publishInfoOpt.get
+
+        m2Pom.writeOver(
+          PomTemplate.pom(
+            name = st"$org.${m.id}_$scalaMajorVersion".render,
+            org = org,
+            module = module,
+            description = pi.description,
+            version = version,
+            url = pi.url,
+            licenses = for (l <- pi.licenses) yield PomTemplate.license(l.name, l.url, l.distribution),
+            developers = for (d <- pi.developers) yield PomTemplate.dev(d.id, d.name),
+            dependencies = deps
+          ).render
+        )
+        println(s"Wrote $m2Pom")
+
+        val m2PomSha1 = (m2Pom.up / s"${m2Pom.name}.sha1").canon
+        m2PomSha1.writeOver(m2Pom.sha1)
+        println(s"Wrote $m2PomSha1")
+
+        val m2PomMd5 = (m2Pom.up / s"${m2Pom.name}.md5").canon
+        m2PomMd5.writeOver(m2Pom.md5)
+        println(s"Wrote $m2PomMd5")
+      }
+
+      writeMainJar()
+      writeSourcesJar()
+      writePom()
+    }
 
     return 0
   }
@@ -826,7 +973,7 @@ object Proyek {
         val ideaPluginsDir = ideaDir / "plugins"
 
         val (jdkClassPath, jdkSourcePath): (ISZ[ST], ISZ[ST]) =
-          ( for (m <- jdkModules.elements) yield
+          (for (m <- jdkModules.elements) yield
             st"""            <root url="jrt://${normalizePath(javaHome.string)}!/$m" type="simple" />""",
             for (m <- jdkModules.elements) yield
               st"""            <root url="jar://${normalizePath(javaHome.string)}/lib/src.zip!/$m" type="simple" />""")
@@ -1144,6 +1291,66 @@ object Proyek {
       println(s"Wrote $f")
     }
 
+  }
+
+  object PomTemplate {
+
+    @strictpure def license(name: String, url: String, distribution: String): ST =
+      st"""<license>
+          |  <name>$name</name>
+          |  <url>$url</url>
+          |  <distribution>$distribution</distribution>
+          |</license>"""
+
+    @strictpure def dev(id: String, name: String): ST =
+      st"""<developer>
+          |  <id>$id</id>
+          |  <name>$name</name>
+          |</developer>"""
+
+    @strictpure def dep(org: String, module: String, version: String): ST =
+      st"""<dependency>
+          |  <groupId>$org</groupId>
+          |  <artifactId>$module</artifactId>
+          |  <version>$version</version>
+          |</dependency>"""
+
+    @strictpure def pom(name: String,
+                        org: String,
+                        module: String,
+                        description: String,
+                        version: String,
+                        url: String,
+                        licenses: ISZ[ST],
+                        developers: ISZ[ST],
+                        dependencies: ISZ[ST]): ST =
+      st"""<?xml version="1.0" encoding="UTF-8"?>
+          |<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+          |         xmlns="http://maven.apache.org/POM/4.0.0"
+          |         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          |  <modelVersion>4.0.0</modelVersion>
+          |  <name>$name</name>
+          |  <groupId>$org</groupId>
+          |  <artifactId>$module</artifactId>
+          |  <packaging>jar</packaging>
+          |  <description>$description</description>
+          |  <version>$version</version>
+          |  <url>https://$url</url>
+          |  <licenses>
+          |    ${(licenses, "\n")}
+          |  </licenses>
+          |  <scm>
+          |    <connection>scm:git://$url.git</connection>
+          |    <url>git://$url.git</url>
+          |  </scm>
+          |  <developers>
+          |    ${(developers, "\n")}
+          |  </developers>
+          |  <dependencies>
+          |    ${(dependencies, "\n")}
+          |  </dependencies>
+          |</project>
+          |"""
   }
 
 }

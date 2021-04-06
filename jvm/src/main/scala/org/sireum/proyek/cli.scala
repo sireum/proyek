@@ -114,7 +114,7 @@ object cli {
   val assembleTool: Tool = Tool(
     name = "assemble",
     command = "assemble",
-    description = "Sireum Proyek Jar Assembler",
+    description = "Proyek jar assembler",
     header = "Sireum Proyek Jar Assembler",
     usage = "<options>* <dir>",
     opts = ISZ(
@@ -137,7 +137,7 @@ object cli {
   val compileTool: Tool = Tool(
     name = "compile",
     command = "compile",
-    description = "Sireum Proyek Compiler",
+    description = "Proyek compiler",
     header = "Sireum Proyek Compiler",
     usage = "<options>* <dir>",
     opts = ISZ(
@@ -154,8 +154,8 @@ object cli {
   val iveTool: Tool = Tool(
     name = "ive",
     command = "ive",
-    description = "Sireum IVE Proyek Generator",
-    header = "Sireum IVE Proyek",
+    description = "Sireum IVE proyek generator",
+    header = "Sireum IVE Proyek Generator",
     usage = "<options>* <dir>",
     opts = ISZ(
       Opt(name = "force", longKey = "force", shortKey = Some('f'),
@@ -169,10 +169,35 @@ object cli {
     )
   )
 
+  val publishTool: Tool = Tool(
+    name = "publish",
+    command = "publish",
+    description = "Proyek publisher",
+    header = "Sireum Proyek Publisher",
+    usage = "<options>* <dir> <org.name>",
+    opts = ISZ(
+      Opt(
+        name = "m2", longKey = "m2", shortKey = None(),
+        tpe = Type.Path(F, None()),
+        description = """Local m2 repository (defaults to the user home's .m2 directory)"""
+      ),
+      Opt(
+        name = "version", longKey = "version", shortKey = None(),
+        tpe = Type.Str(None(), None()),
+        description = """Publication version (defaults to using git commit date, time, and abbreviated hash)"""
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      compileOptGroup,
+      ivyOptGroup
+    )
+  )
+
   val testTool: Tool = Tool(
     name = "test",
     command = "test",
-    description = "Sireum Proyek Test Runner",
+    description = "Proyek test runner",
     header = "Sireum Proyek Test Runner",
     usage = "<options>* <dir> <package-name>*",
     opts = ISZ(
@@ -194,7 +219,7 @@ object cli {
     description = "Project tools",
     header = "Sireum Proyek",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, testTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, publishTool, testTool)
   )
 
 }
