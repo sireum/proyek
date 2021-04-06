@@ -111,7 +111,7 @@ object Proyek_Ext {
     }
 
     if (numOfScalaFiles > 0) {
-      val scalac: Os.Path = if (Os.isWin) scalaHome / "bin" / "scalac.bat" else scalaHome / "bin" / "scalac"
+      val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
       scalaArgs = scalaArgs ++ scalacOptions
       scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield f.string)
 
@@ -129,7 +129,7 @@ object Proyek_Ext {
         javaArgs = javaArgs ++ javaSources
         val argFile = outDir.up / "javac-args"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
-        val javac: Os.Path = if (Os.isWin) javaHome / "bin" / "javac.bat" else javaHome / "bin" / "javac"
+        val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
         val r = proc"$javac @${argFile.name}".at(argFile.up.canon).console.run()
         sb.append(r.out.value)
         sb.append(r.err.value)
