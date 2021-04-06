@@ -50,8 +50,6 @@ object Proyek {
                 outDir: Os.Path): (B, String) = $
 
     def rewriteReleaseFence(jar: Os.Path): Unit = $
-
-    def test(args: ISZ[String]): Unit = $
   }
 
   @datatype class Lib(val name: String,
@@ -693,6 +691,7 @@ object Proyek {
            project: Project,
            projectName: String,
            dm: DependencyManager,
+           javaHome: Os.Path,
            names: ISZ[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName)
@@ -717,13 +716,22 @@ object Proyek {
       testClasspath = testClasspath ++ (for (r <- m.resources ++ m.testResources) yield s"$base$r")
     }
 
+    val classpath: ISZ[String] =
+      for (cif <- Coursier.fetch(ISZ(s"org.scalatest::scalatest::${dm.versions.get("org.scalatest%%scalatest%%").get}"))) yield cif.path.string
+
     var args = ISZ[String](
+      "-classpath", st"${(classpath, Os.pathSep)}".render,
+      "org.scalatest.tools.Runner",
       "-oF", "-P1",
-      "-R", st"""${(testClasspath, " ")}""".render
+      "-R", st""""${(testClasspath, " ")}"""".render
     )
     args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
 
-    Ext.test(args)
+    val argFile = proyekDir / "test-args"
+    argFile.writeOver(st"${(args, "\n")}".render)
+
+    val javaExe = javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
+    proc"$javaExe @$argFile".at(path).console.runCheck()
 
     return 0
   }

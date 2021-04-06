@@ -163,6 +163,4 @@ object Proyek_Ext {
     fs.close()
   }
 
-  def test(args: ISZ[String]): Unit = org.scalatest.tools.Runner.main(args.elements.map(_.value).toArray)
-
 }
