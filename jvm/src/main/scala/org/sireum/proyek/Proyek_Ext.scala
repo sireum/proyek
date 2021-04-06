@@ -117,9 +117,10 @@ object Proyek_Ext {
 
       val argFile = outDir.up / "scalac-args"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      val r = proc"$scalac @${argFile.name}".redirectErr.at(argFile.up.canon).run()
+      val r = proc"$scalac @${argFile.name}".at(argFile.up.canon).run()
       ok = r.ok
       sb.append(r.out.value)
+      sb.append(r.err.value)
     }
 
     if (ok) {
@@ -131,6 +132,7 @@ object Proyek_Ext {
         val javac: Os.Path = if (Os.isWin) javaHome / "bin" / "javac.bat" else javaHome / "bin" / "javac"
         val r = proc"$javac @${argFile.name}".at(argFile.up.canon).console.run()
         sb.append(r.out.value)
+        sb.append(r.err.value)
         return (r.ok, sb.toString)
       } else {
         return (T, sb.toString)
@@ -160,5 +162,7 @@ object Proyek_Ext {
     process(fs.getPath("/scala/runtime/Statics.class"))
     fs.close()
   }
+
+  def test(args: ISZ[String]): Unit = org.scalatest.tools.Runner.main(args.elements.map(_.value).toArray)
 
 }

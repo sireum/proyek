@@ -50,6 +50,8 @@ object Proyek {
                 outDir: Os.Path): (B, String) = $
 
     def rewriteReleaseFence(jar: Os.Path): Unit = $
+
+    def test(args: ISZ[String]): Unit = $
   }
 
   @datatype class Lib(val name: String,
@@ -246,7 +248,6 @@ object Proyek {
   def compile(path: Os.Path,
               outDirName: String,
               project: Project,
-              versions: Map[String, String],
               projectName: String,
               dm: DependencyManager,
               javaHome: Os.Path,
@@ -265,13 +266,15 @@ object Proyek {
 
     val compileAll: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
-      val m = jsonParser.parseMap(jsonParser.parseString _, jsonParser.parseString _)
-      if (jsonParser.errorOpt.isEmpty) m != versions else T
+      val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
+      if (jsonParser.errorOpt.isEmpty) m != dm.versions else T
     } else {
       T
     }
     if (compileAll) {
-      versionsCache.writeOver(Json.Printer.printMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render)
+      versionsCache.writeOver(
+        Json.Printer.printHashSMap(F, dm.versions, Json.Printer.printString _, Json.Printer.printString _).render
+      )
     }
 
     val scalacOptions = ISZ[String](
@@ -684,6 +687,55 @@ object Proyek {
 
     return 0
   }
+
+  def test(path: Os.Path,
+           outDirName: String,
+           project: Project,
+           projectName: String,
+           dm: DependencyManager,
+           javaHome: Os.Path,
+           par: B,
+           names: ISZ[String]): Z = {
+
+    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val projectOutDir = proyekDir / "modules"
+
+    val classpath: ISZ[String] =
+      for (cif <- Coursier.fetch(ISZ(s"org.scalatest::scalatest::${dm.versions.get("org.scalatest%%scalatest%%").get}"))) yield cif.path.string
+
+    var testClasspath = ISZ[String]()
+
+    for (lib <- dm.libMap.values) {
+      testClasspath = testClasspath :+ lib.main
+    }
+
+    for (m <- project.modules.values) {
+      val mDir = projectOutDir / m.id / mainOutDirName
+      val mTestDir = projectOutDir / m.id / testOutDirName
+      testClasspath = testClasspath ++ ISZ(mDir.string, mTestDir.string)
+
+      var base = m.basePath
+      m.subPathOpt match {
+        case Some(subPath) => base = s"$base$subPath"
+        case _ =>
+      }
+      testClasspath = testClasspath ++ (for (r <- m.resources ++ m.testResources) yield s"$base$r")
+    }
+
+    var args = ISZ[String](
+      "-o",
+      "-R", st"""${(testClasspath, " ")}""".render
+    )
+    if (par) {
+      args = args :+ "-P"
+    }
+    args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
+
+    Ext.test(args)
+
+    return 0
+  }
+
 
   @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String): Os.Path =
     path / outDirName / s"$projectName"

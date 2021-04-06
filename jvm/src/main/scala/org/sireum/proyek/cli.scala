@@ -157,12 +157,31 @@ object cli {
     )
   )
 
+  val testTool: Tool = Tool(
+    name = "test",
+    command = "test",
+    description = "Sireum Proyek Test Runner",
+    header = "Sireum Proyek Test Runner",
+    usage = "<options>* <dir> ( all | <name>* )",
+    opts = ISZ(
+      Opt(name = "par", longKey = "par", shortKey = Some('p'),
+        tpe = Type.Flag(F),
+        description = "Enable parallelization"
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      incrementalOptGroup,
+      ivyOptGroup
+    )
+  )
+
   val group: Group = Group(
     name = "proyek",
     description = "Project tools",
     header = "Sireum Proyek",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, testTool)
   )
 
 }
