@@ -77,23 +77,37 @@ object cli {
         description = "Follow symbolic link when searching for files"
       ),
       Opt(name = "versions", longKey = "versions", shortKey = Some('v'),
-        tpe = Type.Path(F, None()),
-        description = "The properties file containing version information (defaults to <dir>${Os.fileSep}versions.properties)"
+        tpe = Type.Path(T, None()),
+        description = "The properties file(s) containing version information (defaults to <dir>${Os.fileSep}versions.properties)"
       )
     )
   )
 
-  val incrementalOptGroup: OptGroup = OptGroup(
-    name = "Incremental Compilation",
+  val freshParSha3Opts: (Opt, Opt, Opt) = (
+    Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
+      tpe = Type.Flag(F),
+      description = "Fresh compilation from a clean slate"
+    ),
+    Opt(name = "par", longKey = "par", shortKey = Some('p'),
+      tpe = Type.Flag(F),
+      description = "Enable parallelization"
+    ),
+    Opt(name = "sha3", longKey = "sha3", shortKey = None(),
+      tpe = Type.Flag(F),
+      description = "Use SHA3 instead of time stamp for detecting file changes"
+    )
+  )
+
+  val compileOptGroup: OptGroup = OptGroup(
+    name = "Compilation",
     opts = ISZ(
-      Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
+      freshParSha3Opts._1,
+      freshParSha3Opts._2,
+      Opt(name = "skipCompile", longKey = "skip-compile", shortKey = None(),
         tpe = Type.Flag(F),
-        description = "Fresh compilation from a clean slate"
+        description = "Skip compilation"
       ),
-      Opt(name = "sha3", longKey = "sha3", shortKey = None(),
-        tpe = Type.Flag(F),
-        description = "Use SHA3 instead of time stamp for detecting file changes"
-      )
+      freshParSha3Opts._3
     )
   )
 
@@ -104,18 +118,18 @@ object cli {
     header = "Sireum Proyek Jar Assembler",
     usage = "<options>* <dir>",
     opts = ISZ(
+      Opt(name = "jar", longKey = "jar", shortKey = Some('j'),
+        tpe = Type.Str(None(), None()),
+        description = "The assembled jar filename (defaults to the project name)"
+      ),
       Opt(name = "mainClass", longKey = "main", shortKey = Some('m'),
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"
-      ),
-      Opt(name = "par", longKey = "par", shortKey = Some('p'),
-        tpe = Type.Flag(F),
-        description = "Enable parallelization"
       )
     ),
     groups = ISZ(
       projectOptGroup,
-      incrementalOptGroup,
+      compileOptGroup,
       ivyOptGroup
     )
   )
@@ -127,14 +141,12 @@ object cli {
     header = "Sireum Proyek Compiler",
     usage = "<options>* <dir>",
     opts = ISZ(
-      Opt(name = "par", longKey = "par", shortKey = Some('p'),
-        tpe = Type.Flag(F),
-        description = "Enable parallelization"
-      )
+      freshParSha3Opts._1,
+      freshParSha3Opts._2,
+      freshParSha3Opts._3
     ),
     groups = ISZ(
       projectOptGroup,
-      incrementalOptGroup,
       ivyOptGroup
     )
   )
@@ -162,16 +174,17 @@ object cli {
     command = "test",
     description = "Sireum Proyek Test Runner",
     header = "Sireum Proyek Test Runner",
-    usage = "<options>* <dir> ( all | <name>* )",
+    usage = "<options>* <dir> <package-name>*",
     opts = ISZ(
-      Opt(name = "par", longKey = "par", shortKey = Some('p'),
-        tpe = Type.Flag(F),
-        description = "Enable parallelization"
+      Opt(
+        name = "classes", longKey = "classes", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Specific fully-qualified test class names to run"
       )
     ),
     groups = ISZ(
       projectOptGroup,
-      incrementalOptGroup,
+      compileOptGroup,
       ivyOptGroup
     )
   )

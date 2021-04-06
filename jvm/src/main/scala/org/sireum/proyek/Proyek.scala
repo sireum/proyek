@@ -124,7 +124,7 @@ object Proyek {
     @memoize def computeTransitiveDeps(m: Module): ISZ[String] = {
       var r = HashSSet.empty[String]
       for (mDep <- m.deps) {
-        r = r ++ computeTransitiveDeps(getModule(mDep)) + mDep
+        r = r + mDep ++ computeTransitiveDeps(getModule(mDep))
       }
       return r.elements
     }
@@ -189,6 +189,7 @@ object Proyek {
                outDirName: String,
                project: Project,
                projectName: String,
+               jarName: String,
                dm: DependencyManager,
                scalaHome: Os.Path,
                mainClassNameOpt: Option[String]): Z = {
@@ -200,7 +201,7 @@ object Proyek {
 
     val assembleDir = proyekDir / "assemble"
     val contentDir = assembleDir / "content"
-    val jar = assembleDir / s"$projectName.jar"
+    val jar = assembleDir / s"$jarName.jar"
     jar.removeAll()
 
     println(s"Assembling ...")
@@ -341,73 +342,76 @@ object Proyek {
         T
       }
 
+      def compileModuleH(): (CompileStatus.Type, String) = {
+        var classpath: ISZ[Os.Path] = (for (lib <- dm.fetchTransitiveLibs(m)) yield Os.path(lib.main))
+        classpath = classpath ++ (
+          for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / mainOutDirName).exists) yield
+            projectOutDir / mDep / mainOutDirName
+        )
+
+        val mainOutDir = projectOutDir / m.id / mainOutDirName
+        classpath = mainOutDir +: classpath
+        mainOutDir.removeAll()
+        mainOutDir.mkdirAll()
+        val (mainOk, mainOut) = Ext.compile(
+          mid = m.id,
+          category = "main",
+          javaHome = javaHome,
+          scalaHome = scalaHome,
+          scalacOptions = scalacOptions,
+          javacOptions = javacOptions,
+          classpath = classpath,
+          sourceFiles = sourceFiles,
+          outDir = mainOutDir
+        )
+
+        if (mainOk) {
+          if (testSourceFiles.nonEmpty) {
+            val testOutDir = projectOutDir / m.id / testOutDirName
+
+            classpath = classpath ++ (
+              for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / testOutDirName).exists) yield
+                projectOutDir / mDep / testOutDirName
+            )
+            classpath = testOutDir +: classpath
+            testOutDir.removeAll()
+            testOutDir.mkdirAll()
+
+            val (testOk, testOut) = Ext.compile(
+              mid = m.id,
+              category = "test",
+              javaHome = javaHome,
+              scalaHome = scalaHome,
+              scalacOptions = scalacOptions,
+              javacOptions = javacOptions,
+              classpath = classpath,
+              sourceFiles = testSourceFiles,
+              outDir = testOutDir
+            )
+            if (testOk) {
+              return (CompileStatus.Compiled, s"$mainOut$testOut")
+            } else {
+              return (CompileStatus.Error, s"$mainOut$testOut")
+            }
+          } else {
+            return (CompileStatus.Compiled, mainOut)
+          }
+        } else {
+          return (CompileStatus.Error, mainOut)
+        }
+      }
+
       if (compile) {
-        fileTimestampCache.writeOver(Json.Printer.printHashMap(F, fileTimestampMap, Json.Printer.printString _,
-          Json.Printer.printString _).render)
+        val r = compileModuleH()
+        if (r._1 != CompileStatus.Error) {
+          fileTimestampCache.writeOver(Json.Printer.printHashMap(F, fileTimestampMap, Json.Printer.printString _,
+            Json.Printer.printString _).render)
+        }
+        return r
       } else {
         return (CompileStatus.Skipped, "")
       }
 
-      var classpath: ISZ[Os.Path] = (for (lib <- dm.fetchTransitiveLibs(m)) yield Os.path(lib.main))
-      for (mDep <- dm.computeTransitiveDeps(m)) {
-        val p = projectOutDir / mDep / mainOutDirName
-        if (p.exists) {
-          classpath = classpath :+ p
-        }
-      }
-
-      val mainOutDir = projectOutDir / m.id / mainOutDirName
-      classpath = classpath :+ mainOutDir
-      mainOutDir.removeAll()
-      mainOutDir.mkdirAll()
-      val (mainOk, mainOut) = Ext.compile(
-        mid = m.id,
-        category = "main",
-        javaHome = javaHome,
-        scalaHome = scalaHome,
-        scalacOptions = scalacOptions,
-        javacOptions = javacOptions,
-        classpath = classpath,
-        sourceFiles = sourceFiles,
-        outDir = mainOutDir
-      )
-
-      if (mainOk) {
-        if (testSourceFiles.nonEmpty) {
-          val testOutDir = projectOutDir / m.id / testOutDirName
-
-          for (mDep <- dm.computeTransitiveDeps(m)) {
-            val p = projectOutDir / mDep / testOutDirName
-            if (p.exists) {
-              classpath = classpath :+ p
-            }
-          }
-          classpath = classpath :+ testOutDir
-          testOutDir.removeAll()
-          testOutDir.mkdirAll()
-
-          val (testOk, testOut) = Ext.compile(
-            mid = m.id,
-            category = "test",
-            javaHome = javaHome,
-            scalaHome = scalaHome,
-            scalacOptions = scalacOptions,
-            javacOptions = javacOptions,
-            classpath = classpath,
-            sourceFiles = testSourceFiles,
-            outDir = testOutDir
-          )
-          if (testOk) {
-            return (CompileStatus.Compiled, s"$mainOut$testOut")
-          } else {
-            return (CompileStatus.Error, s"$mainOut$testOut")
-          }
-        } else {
-          return (CompileStatus.Compiled, mainOut)
-        }
-      } else {
-        return (CompileStatus.Error, mainOut)
-      }
     }
 
     if (fresh) {
@@ -606,11 +610,11 @@ object Proyek {
               |      ${(testSources, "\n")}
               |      ${(testResources, "\n")}
               |    </content>
-              |    <orderEntry type="inheritedJdk" />
-              |    <orderEntry type="library" name="Scala" level="project" />
-              |    ${(deps, "\n")}
               |    <orderEntry type="sourceFolder" forTests="false" />
+              |    ${(deps, "\n")}
               |    ${(libs, "\n")}
+              |    <orderEntry type="library" name="Scala" level="project" />
+              |    <orderEntry type="inheritedJdk" />
               |  </component>
               |</module>
               |"""
@@ -692,6 +696,7 @@ object Proyek {
            projectName: String,
            dm: DependencyManager,
            javaHome: Os.Path,
+           classNames: ISZ[String],
            names: ISZ[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName)
@@ -699,14 +704,18 @@ object Proyek {
 
     var testClasspath = ISZ[String]()
 
-    for (lib <- dm.libMap.values) {
-      testClasspath = testClasspath :+ lib.main
+    for (m <- project.modules.values) {
+      val mTestDir = projectOutDir / m.id / testOutDirName
+      if (mTestDir.exists) {
+        testClasspath = testClasspath :+ mTestDir.string
+      }
     }
 
     for (m <- project.modules.values) {
       val mDir = projectOutDir / m.id / mainOutDirName
-      val mTestDir = projectOutDir / m.id / testOutDirName
-      testClasspath = testClasspath ++ ISZ(mDir.string, mTestDir.string)
+      if (mDir.exists) {
+        testClasspath = testClasspath :+ mDir.string
+      }
 
       var base = m.basePath
       m.subPathOpt match {
@@ -716,6 +725,10 @@ object Proyek {
       testClasspath = testClasspath ++ (for (r <- m.resources ++ m.testResources) yield s"$base$r")
     }
 
+    for (lib <- dm.libMap.values) {
+      testClasspath = testClasspath :+ lib.main
+    }
+
     val classpath: ISZ[String] =
       for (cif <- Coursier.fetch(ISZ(s"org.scalatest::scalatest::${dm.versions.get("org.scalatest%%scalatest%%").get}"))) yield cif.path.string
 
@@ -723,11 +736,12 @@ object Proyek {
       "-classpath", st"${(classpath, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
-      "-R", st""""${(testClasspath, " ")}"""".render
+      "-R", st""""${(if (Os.isWin) for (p <- testClasspath) yield Os.path(p).toUri else testClasspath, " ")}"""".render
     )
+    args = args ++ (for (args2 <- for (name <- classNames) yield ISZ[String]("-s", name); arg <- args2) yield arg)
     args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
 
-    val argFile = proyekDir / "test-args"
+    val argFile = proyekDir / "java-test-args"
     argFile.writeOver(st"${(args, "\n")}".render)
 
     val javaExe = javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")

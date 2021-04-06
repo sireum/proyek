@@ -115,7 +115,7 @@ object Proyek_Ext {
       scalaArgs = scalaArgs ++ scalacOptions
       scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield f.string)
 
-      val argFile = outDir.up / "scalac-args"
+      val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
       val r = proc"$scalac @${argFile.name}".at(argFile.up.canon).run()
       ok = r.ok
@@ -127,7 +127,7 @@ object Proyek_Ext {
       if (javaSources.nonEmpty) {
         javaArgs = javaArgs ++ javacOptions
         javaArgs = javaArgs ++ javaSources
-        val argFile = outDir.up / "javac-args"
+        val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
         val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
         val r = proc"$javac @${argFile.name}".at(argFile.up.canon).console.run()
