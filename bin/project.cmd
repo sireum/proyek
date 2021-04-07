@@ -34,7 +34,7 @@ val proyekJvm = moduleJvmPub(
   pubOpt = pub(
     desc = "Sireum Proyek",
     url = "github.com/sireum/proyek",
-    licenses = org.sireum.project.ProjectUtil.bsd2,
+    licenses = bsd2,
     devs = ISZ(robby)
   )
 )
