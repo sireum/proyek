@@ -722,8 +722,19 @@ object Proyek {
       val org = st"${(orgName, ".")}".render
       val module = s"${m.id}_$scalaMajorVersion"
 
+      var base = m.basePath
+      m.subPathOpt match {
+        case Some(subPath) => base = s"$base$subPath"
+        case _ =>
+      }
+
       def writeMainJar(): Unit = {
         val mOutMainDir = mOutDir / mainOutDirName
+
+        for (resource <- m.resources) {
+          val resourcePath = Os.path(s"$base$resource")
+          resourcePath.overlayCopy(mOutMainDir, F, symlink, shouldCopy _, F)
+        }
 
         val mainMetaInf = mOutMainDir / metaInf / manifestMf
         mainMetaInf.up.mkdirAll()
@@ -749,12 +760,6 @@ object Proyek {
 
       def writeSourcesJar(): Unit = {
         val mOutSourcesDir = mOutDir / sourcesOutDirName
-
-        var base = m.basePath
-        m.subPathOpt match {
-          case Some(subPath) => base = s"$base$subPath"
-          case _ =>
-        }
 
         for (source <- m.sources) {
           val sourcePath = Os.path(s"$base$source")
