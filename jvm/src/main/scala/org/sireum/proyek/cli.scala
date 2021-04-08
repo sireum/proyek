@@ -205,6 +205,16 @@ object cli {
         name = "classes", longKey = "classes", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Specific fully-qualified test class names to run"
+      ),
+      Opt(
+        name = "suffixes", longKey = "suffixes", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Specific test class name suffixes to run"
+      ),
+      Opt(
+        name = "packages", longKey = "packages", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Specific fully-qualified test package names to run"
       )
     ),
     groups = ISZ(

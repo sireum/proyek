@@ -853,6 +853,8 @@ object Proyek {
            dm: DependencyManager,
            javaHome: Os.Path,
            classNames: ISZ[String],
+           suffixes: ISZ[String],
+           packageNames: ISZ[String],
            names: ISZ[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName)
@@ -895,7 +897,12 @@ object Proyek {
       "-R", st""""${(if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
         else testClasspath, " ")}"""".render
     )
-    args = args ++ (for (args2 <- for (name <- classNames) yield ISZ[String]("-s", name); arg <- args2) yield arg)
+    args = args ++ (for (args2 <- for (name <- classNames) yield
+      ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
+    args = args ++ (for (args2 <- for (suffix <- suffixes) yield
+      ISZ[String]("-q", ops.StringOps(suffix).trim); arg <- args2) yield arg)
+    args = args ++ (for (args2 <- for (name <- packageNames) yield
+      ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
     args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
 
     val argFile = proyekDir / "java-test-args"
