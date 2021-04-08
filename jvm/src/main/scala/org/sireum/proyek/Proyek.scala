@@ -892,7 +892,8 @@ object Proyek {
       "-classpath", st"${(classpath, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
-      "-R", st""""${(if (Os.isWin) for (p <- testClasspath) yield Os.path(p).toUri else testClasspath, " ")}"""".render
+      "-R", st""""${(if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
+        else testClasspath, " ")}"""".render
     )
     args = args ++ (for (args2 <- for (name <- classNames) yield ISZ[String]("-s", name); arg <- args2) yield arg)
     args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
