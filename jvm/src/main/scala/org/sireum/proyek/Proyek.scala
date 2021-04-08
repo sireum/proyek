@@ -259,7 +259,7 @@ object Proyek {
     var compileAll: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
       val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
-      if (jsonParser.errorOpt.isEmpty) m != dm.versions else T
+      jsonParser.errorOpt.nonEmpty || m != dm.versions
     } else {
       T
     }
@@ -270,10 +270,9 @@ object Proyek {
 
     if (!compileAll) {
       if (projectCache.exists) {
-        org.sireum.project.JSON.toProject(projectCache.read) match {
-          case Either.Left(p) => compileAll = p == projectNoPub
-          case _ => compileAll = T
-        }
+        val parser = org.sireum.project.JSON.Parser(projectCache.read)
+        val m = parser.parser.parseHashSMap(parser.parser.parseString _, parser.parseModule _)
+        compileAll = parser.errorOpt.nonEmpty || m != projectNoPub.modules
       } else {
         compileAll = T
       }
@@ -283,7 +282,8 @@ object Proyek {
       versionsCache.writeOver(
         Json.Printer.printHashSMap(F, dm.versions, Json.Printer.printString _, Json.Printer.printString _).render
       )
-      projectCache.writeOver(org.sireum.project.JSON.fromProject(projectNoPub, F))
+      projectCache.writeOver(Json.Printer.printHashSMap(F, projectNoPub.modules, Json.Printer.printString _,
+        org.sireum.project.JSON.Printer.printModule _).render)
     }
 
     val scalacOptions = ISZ[String](
