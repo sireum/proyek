@@ -38,20 +38,6 @@ object Proyek {
     'Error
   }
 
-  @ext("Proyek_Ext") object Ext {
-    def compile(mid: String,
-                category: String,
-                javaHome: Os.Path,
-                scalaHome: Os.Path,
-                scalacOptions: ISZ[String],
-                javacOptions: ISZ[String],
-                classpath: ISZ[Os.Path],
-                sourceFiles: ISZ[Os.Path],
-                outDir: Os.Path): (B, String) = $
-
-    def rewriteReleaseFence(jar: Os.Path): Unit = $
-  }
-
   @datatype class Lib(val name: String,
                       val org: String,
                       val module: String,
@@ -243,7 +229,7 @@ object Proyek {
 
     contentDir.zipTo(jar)
 
-    Ext.rewriteReleaseFence(jar)
+    Asm.rewriteReleaseFence(jar)
 
     println(s"Wrote $jar")
 
@@ -268,18 +254,36 @@ object Proyek {
     val projectOutDir = proyekDir / "modules"
 
     val versionsCache = proyekDir / "versions.json"
+    val projectCache = proyekDir / "proyek.json"
 
-    val compileAll: B = if (versionsCache.exists) {
+    var compileAll: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
       val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
       if (jsonParser.errorOpt.isEmpty) m != dm.versions else T
     } else {
       T
     }
+
+    val projectNoPub: Project = project(
+      modules = HashSMap ++ (for (p <- project.modules.entries) yield (p._1, p._2(publishInfoOpt = None())))
+    )
+
+    if (!compileAll) {
+      if (projectCache.exists) {
+        org.sireum.project.JSON.toProject(projectCache.read) match {
+          case Either.Left(p) => compileAll = p == projectNoPub
+          case _ => compileAll = T
+        }
+      } else {
+        compileAll = T
+      }
+    }
+
     if (compileAll) {
       versionsCache.writeOver(
         Json.Printer.printHashSMap(F, dm.versions, Json.Printer.printString _, Json.Printer.printString _).render
       )
+      projectCache.writeOver(org.sireum.project.JSON.fromProject(projectNoPub, F))
     }
 
     val scalacOptions = ISZ[String](
@@ -361,7 +365,7 @@ object Proyek {
         classpath = mainOutDir +: classpath
         mainOutDir.removeAll()
         mainOutDir.mkdirAll()
-        val (mainOk, mainOut) = Ext.compile(
+        val (mainOk, mainOut) = runCompilers(
           mid = m.id,
           category = "main",
           javaHome = javaHome,
@@ -385,7 +389,7 @@ object Proyek {
             testOutDir.removeAll()
             testOutDir.mkdirAll()
 
-            val (testOk, testOut) = Ext.compile(
+            val (testOk, testOut) = runCompilers(
               mid = m.id,
               category = "test",
               javaHome = javaHome,
@@ -1358,4 +1362,66 @@ object Proyek {
           |"""
   }
 
+  def runCompilers(mid: String,
+                    category: String,
+                    javaHome: Os.Path,
+                    scalaHome: Os.Path,
+                    scalacOptions: ISZ[String],
+                    javacOptions: ISZ[String],
+                    classpath: ISZ[Os.Path],
+                    sourceFiles: ISZ[Os.Path],
+                    outDir: Os.Path): (B, String) = {
+
+    if (sourceFiles.isEmpty) {
+      return (T, "")
+    }
+
+    var scalaArgs = ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render)
+    scalaArgs = scalaArgs :+ "-d" :+ outDir.string
+    var javaArgs = scalaArgs
+
+    var ok = T
+    var sb = ISZ[ST]()
+
+    val javaSources: ISZ[String] = for (f <- sourceFiles if f.ext === "java") yield f.string
+    val numOfScalaFiles: Z = sourceFiles.size - javaSources.size
+    val numOfJavaFiles: Z = javaSources.size
+
+    (numOfScalaFiles, numOfJavaFiles) match {
+      case (z"0", _) => sb = sb :+ st"* Compiled $numOfJavaFiles Java $mid $category source file${if (numOfJavaFiles > 1) "s" else ""}\n"
+      case (_, z"0") => sb = sb :+ st"* Compiled $numOfScalaFiles Scala $mid $category source file${if (numOfScalaFiles > 1) "s" else ""}\n"
+      case (_, _) => sb = sb :+ st"* Compiled $numOfScalaFiles Scala and $numOfJavaFiles Java $mid $category source files\n"
+    }
+
+    if (numOfScalaFiles > 0) {
+      val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
+      scalaArgs = scalaArgs ++ scalacOptions
+      scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield f.string)
+
+      val argFile = outDir.up / s"scalac-args-$category"
+      argFile.writeOver(st"${(scalaArgs, "\n")}".render)
+      val r = proc"$scalac @${argFile.name}".at(argFile.up.canon).run()
+      ok = r.ok
+      sb = sb :+ st"${r.out}"
+      sb = sb :+ st"${r.err}"
+    }
+
+    if (ok) {
+      if (javaSources.nonEmpty) {
+        javaArgs = javaArgs ++ javacOptions
+        javaArgs = javaArgs ++ javaSources
+        val argFile = outDir.up / s"javac-args-$category"
+        argFile.writeOver(st"${(javaArgs, "\n")}".render)
+        val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
+        val r = proc"$javac @${argFile.name}".at(argFile.up.canon).console.run()
+        sb = sb :+ st"${r.out}"
+        sb = sb :+ st"${r.err}"
+        return (r.ok, st"${(sb, "")}".render)
+      } else {
+        return (T, sb.toString)
+      }
+    } else {
+      return (F, sb.toString)
+    }
+  }
 }
