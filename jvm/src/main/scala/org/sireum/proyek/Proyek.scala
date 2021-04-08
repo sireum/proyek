@@ -490,6 +490,7 @@ object Proyek {
           javaVersion: String,
           jbrVersion: String,
           ideaDir: Os.Path,
+          isUltimate: B,
           isDev: B,
           force: B): Z = {
 
@@ -694,7 +695,7 @@ object Proyek {
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, projectName)
-    IVE.writeApplicationConfigs(force, ideaDir, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeApplicationConfigs(force, ideaDir, isUltimate, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
 
     return 0
   }
@@ -944,15 +945,15 @@ object Proyek {
   object IVE {
 
     def writeApplicationConfigs(force: B,
-                                ideaDir:
-                                Os.Path,
+                                ideaDir: Os.Path,
+                                isUltimate: B,
                                 javaHome: Os.Path,
                                 javaVersion: String,
                                 jbrVersion: String,
                                 devSuffix: String): Unit = {
-
+      val ult: String = if (isUltimate) "-ult" else ""
       val configOptions: Os.Path =
-        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$devSuffix" / "options"
+        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
         else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
       val configColors = (configOptions.up / "colors").canon
       configOptions.mkdirAll()

@@ -161,6 +161,10 @@ object cli {
       Opt(name = "force", longKey = "force", shortKey = Some('f'),
         tpe = Type.Flag(F),
         description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
+      ),
+      Opt(name = "ultimate", longKey = "ultimate", shortKey = Some('u'),
+        tpe = Type.Flag(F),
+        description = "Use IntelliJ Ultimate edition"
       )
     ),
     groups = ISZ(
