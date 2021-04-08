@@ -1138,9 +1138,9 @@ object Proyek {
         }
         fileTypesXml.writeOver(
           st"""<application>
-              |  <component name="FileTypeManager" version="17">
+              |  <component name="FileTypeManager" version="18">
               |    <extensionMap>
-              |      <mapping ext="cmd" type="Scala" />
+              |      <mapping ext="cmd" type="Scala Worksheet" />
               |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
               |    </extensionMap>
               |  </component>
