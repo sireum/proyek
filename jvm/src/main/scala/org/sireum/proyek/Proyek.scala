@@ -1418,10 +1418,10 @@ object Proyek {
         sb = sb :+ st"${r.err}"
         return (r.ok, st"${(sb, "")}".render)
       } else {
-        return (T, sb.toString)
+        return (T, st"${(sb, "")}".render)
       }
     } else {
-      return (F, sb.toString)
+      return (F, st"${(sb, "")}".render)
     }
   }
 }
