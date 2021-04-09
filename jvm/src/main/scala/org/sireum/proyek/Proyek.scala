@@ -27,7 +27,7 @@
 package org.sireum.proyek
 
 import org.sireum._
-import org.sireum.project.{Project, Module}
+import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, Target}
 
 
 object Proyek {
@@ -38,99 +38,25 @@ object Proyek {
     'Error
   }
 
-  @datatype class Lib(val name: String,
-                      val org: String,
-                      val module: String,
-                      val main: String,
-                      val sourcesOpt: Option[String],
-                      val javadocOpt: Option[String])
+  @datatype class CompileModuleProcessor(val root: Os.Path,
+                                         val module: Module,
+                                         val force: B,
+                                         val par: B,
+                                         val sha3: B,
+                                         val followSymLink: B,
+                                         val outDir: Os.Path,
+                                         val javaHome: Os.Path,
+                                         val scalaHome: Os.Path,
+                                         val scalacPlugin: Os.Path,
+                                         val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String)] {
 
-  @sig trait ModuleProcessor[T] {
-    @pure def root: Os.Path
-
-    @pure def module: Module
-
-    @pure def force: B
-
-    @pure def par: B
-
-    @pure def sha3: B
-
-    @pure def followSymLink: B
-
-    @pure def outDir: Os.Path
-
-    @pure def fileFilter(file: Os.Path): B
-
-    def process(shouldProcess: B,
-                dm: DependencyManager,
-                sourceFiles: ISZ[Os.Path],
-                testSourceFiles: ISZ[Os.Path]): (T, B)
-
-    def findSources(path: Os.Path): ISZ[Os.Path] = {
-      return if (path.exists) for (p <- Os.Path.walk(path, F, followSymLink, fileFilter _)) yield p else ISZ()
-    }
-
-    @pure def fingerprint(p: Os.Path): String = {
-      if (sha3) {
-        val sha = crypto.SHA3.init256
-        sha.update(p.readU8s)
-        return st"${sha.finalise()}".render
-      } else {
-        return s"${p.lastModified}}"
-      }
-    }
-
-    def run(dm: DependencyManager): T = {
-      val base: String = module.subPathOpt match {
-        case Some(p) => s"${module.basePath}$p"
-        case _ => module.basePath
-      }
-      var sourceFiles = ISZ[Os.Path]()
-      var testSourceFiles = ISZ[Os.Path]()
-      for (source <- module.sources) {
-        sourceFiles = sourceFiles ++ findSources(Os.path(s"$base$source"))
-      }
-      for (testSource <- module.testSources) {
-        testSourceFiles = testSourceFiles ++ findSources(Os.path(s"$base$testSource"))
-      }
-
-      val fingerprintMap = HashMap.empty[String, String] ++ (
-        if (par && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
-          mParMap((p: Os.Path) => (root.relativize(p).string, fingerprint(p)))
-        else for (p <- sourceFiles ++ testSourceFiles) yield (root.relativize(p).string, fingerprint(p))
-        )
-
-      val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
-      val shouldProcess: B = if (!force && fingerprintCache.exists) {
-        val jsonParser = Json.Parser.create(fingerprintCache.read)
-        val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
-        if (jsonParser.errorOpt.isEmpty) map != fingerprintMap else T
-      } else {
-        T
-      }
-
-      val (r, save) = process(shouldProcess, dm, sourceFiles, testSourceFiles)
-      if (save) {
-        fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
-          Json.Printer.printString _).render)
+    @pure override def fileFilter(file: Os.Path): B = {
+      var r: B = file.ext == "scala"
+      if (!isJs) {
+        r = r || file.ext == "java"
       }
       return r
     }
-  }
-
-  @datatype class JvmModuleProcessor(val root: Os.Path,
-                                     val module: Module,
-                                     val force: B,
-                                     val par: B,
-                                     val sha3: B,
-                                     val followSymLink: B,
-                                     val outDir: Os.Path,
-                                     val javaHome: Os.Path,
-                                     val scalaHome: Os.Path,
-                                     val scalacPlugin: Os.Path) extends ModuleProcessor[(CompileStatus.Type, String)] {
-
-    @strictpure override def fileFilter(file: Os.Path): B = file.ext == "scala" || file.ext == "java"
 
     override def process(shouldProcess: B,
                          dm: DependencyManager,
@@ -141,12 +67,20 @@ object Proyek {
         return ((CompileStatus.Skipped, ""), F)
       }
 
-      var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
+      var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(F, module)) yield Os.path(lib.main)
+      if (isJs) {
+        classpath = dm.fetch(ISZ(s"org.scala-js::scalajs-library:${dm.scalaJsVersion}"))(0).path +: classpath
+      }
       classpath = classpath ++ (
         for (mDep <- dm.computeTransitiveDeps(module) if (outDir / mDep / mainOutDirName).exists) yield
           outDir / mDep / mainOutDirName
         )
 
+      var plugins = ISZ(scalacPlugin)
+      if (isJs) {
+        plugins = plugins :+
+          dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaJsKey).replaceAllChars('%', ':')}${dm.scalaJsVersion}"))(0).path
+      }
       val scalacOptions = ISZ[String](
         "-target:jvm-1.8",
         "-deprecation",
@@ -156,7 +90,7 @@ object Proyek {
         "-unchecked",
         "-Xfatal-warnings",
         "-language:postfixOps",
-        s"-Xplugin:$scalacPlugin"
+        st"-Xplugin:${(plugins, ",")}".render
       )
       val javacOptions = ISZ[String](
         "-source", "1.8",
@@ -220,125 +154,6 @@ object Proyek {
 
   }
 
-  @record class DependencyManager(project: Project, versions: HashSMap[String, String], withSource: B, withDoc: B) {
-
-    val ivyDeps: HashSMap[String, String] = {
-      var r = HashSMap.empty[String, String]
-      for (m <- project.modules.values) {
-        for (ivyDep <- m.ivyDeps) {
-          val v = getVersion(ivyDep)
-          r = r + ivyDep ~> s"$ivyDep$v"
-          //val ivyDepOps = ops.StringOps(ivyDep)
-          //if (ivyDepOps.endsWith("::")) {
-          //  val dep = s"${ivyDepOps.substring(0, ivyDep.size - 2)}$sjsSuffix:"
-          //  r = r + dep ~> s"$dep$v"
-          //}
-        }
-      }
-      r
-    }
-
-    val libMap: HashSMap[String, Lib] = {
-      var r = HashSMap.empty[String, Lib]
-      for (cif <- Coursier.fetchClassifiers(ivyDeps.values, buildClassifiers(withSource, withDoc))) {
-        val name = libName(cif)
-        val p = cif.path
-        val pNameOps = ops.StringOps(p.string)
-        if (!ignoredLibraryNames.contains(name)) {
-          var lib: Lib = r.get(name) match {
-            case Some(l) => l
-            case _ => Lib(name, cif.org, cif.module, "", None(), None())
-          }
-          if (pNameOps.endsWith(sourceJarSuffix)) {
-            lib = lib(sourcesOpt = Some(p.string))
-          } else if (pNameOps.endsWith(docJarSuffix)) {
-            lib = lib(javadocOpt = Some(p.string))
-          } else if (pNameOps.endsWith(jarSuffix)) {
-            lib = lib(main = p.string)
-          } else {
-            halt(s"Expecting a file with .jar extension but found '$p'")
-          }
-          r = r + name ~> lib
-        }
-      }
-      r
-    }
-
-    var tLibMap: HashMap[String, ISZ[Lib]] = HashMap.empty
-
-    var dLibMap: HashMap[String, ISZ[Lib]] = HashMap.empty
-
-    @pure def getVersion(ivyDep: String): String = {
-      versions.get(ops.StringOps(ivyDep).replaceAllChars(':', '%')) match {
-        case Some(v) => return v
-        case _ => halt(s"Could not find version information for '$ivyDep' in $versions")
-      }
-    }
-
-    @pure def getModule(id: String): Module = {
-      project.modules.get(id) match {
-        case Some(m) => return m
-        case _ => halt(s"Could not find module with ID '$id'")
-      }
-    }
-
-    @memoize def computeTransitiveDeps(m: Module): ISZ[String] = {
-      var r = HashSSet.empty[String]
-      for (mDep <- m.deps) {
-        r = r + mDep ++ computeTransitiveDeps(getModule(mDep))
-      }
-      return r.elements
-    }
-
-    @memoize def computeTransitiveIvyDeps(m: Module): ISZ[String] = {
-      var r = HashSSet.empty[String]
-      for (mid <- m.deps) {
-        r = r ++ computeTransitiveIvyDeps(project.modules.get(mid).get)
-      }
-      for (id <- m.ivyDeps) {
-        r = r + ivyDeps.get(id).get
-        //val idOps = ops.StringOps(id)
-        //if (idOps.endsWith("::")) {
-        //  val dep = s"${idOps.substring(0, id.size - 2)}$sjsSuffix:"
-        //  r = r + ivyDeps.get(dep).get
-        //}
-      }
-      return r.elements
-    }
-
-    def fetchTransitiveLibs(m: Module): ISZ[Lib] = {
-      tLibMap.get(m.id) match {
-        case Some(libs) => return libs
-        case _ =>
-      }
-      val r: ISZ[Lib] =
-        for (cif <- Coursier.fetch(computeTransitiveIvyDeps(m)) if !ignoredLibraryNames.contains(libName(cif))) yield libMap.get(libName(cif)).get
-      tLibMap = tLibMap + m.id ~> r
-      return r
-    }
-
-    def fetchDiffLibs(m: Module): ISZ[Lib] = {
-      dLibMap.get(m.id) match {
-        case Some(libs) => return libs
-        case _ =>
-      }
-      var s = HashSSet ++ fetchTransitiveLibs(m)
-      for (mDep <- m.deps) {
-        s = s -- fetchTransitiveLibs(getModule(mDep))
-      }
-      val r = s.elements
-      dLibMap = dLibMap + m.id ~> r
-      return r
-    }
-  }
-
-  val jarSuffix: String = ".jar"
-  val sourceJarSuffix: String = "-sources.jar"
-  val docJarSuffix: String = "-javadoc.jar"
-  val sjsSuffix: String = "_sjs1"
-  val ignoredLibraryNames: HashSet[String] = HashSet ++ ISZ[String](
-    "org.scala-lang.scala-library", "org.scala-lang.scala-reflect", "org.scala-lang.scala-compiler"
-  )
   val ignoredPathNames: HashSet[String] = HashSet ++ ISZ[String](
     ".git", ".DS_Store"
   )
@@ -348,19 +163,17 @@ object Proyek {
   val metaInf: String = "META-INF"
   val manifestMf: String = "MANIFEST.MF"
 
-
   def assemble(path: Os.Path,
                outDirName: String,
                project: Project,
                projectName: String,
                jarName: String,
                dm: DependencyManager,
-               scalaHome: Os.Path,
                mainClassNameOpt: Option[String]): Z = {
 
     val trueF = (_: Os.Path) => T
 
-    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
 
     val assembleDir = proyekDir / "assemble"
@@ -376,7 +189,7 @@ object Proyek {
     val metaDir = contentDir / metaInf
     metaDir.mkdirAll()
 
-    (scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
+    (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
 
     for (lib <- dm.libMap.values) {
       Os.path(lib.main).unzipTo(contentDir)
@@ -413,15 +226,13 @@ object Proyek {
               project: Project,
               projectName: String,
               dm: DependencyManager,
-              javaHome: Os.Path,
-              scalaHome: Os.Path,
-              scalacPlugin: Os.Path,
+              isJs: B,
               followSymLink: B,
               fresh: B,
               par: B,
               sha3: B): Z = {
 
-    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val proyekDir = getProyekDir(path, outDirName, projectName, isJs)
 
     val projectOutDir = proyekDir / "modules"
 
@@ -463,6 +274,7 @@ object Proyek {
     }
     projectOutDir.mkdirAll()
 
+    val target: Target.Type = if (isJs) Target.Js else Target.Jvm
     var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
     var compiledModuleIds = HashSet.empty[String]
     while (modules.nonEmpty) {
@@ -471,51 +283,58 @@ object Proyek {
       for (p <- modules) {
         val m = dm.getModule(p._1)
         if (ops.ISZOps(m.deps).forall((mDep: String) => compiledModuleIds.contains(mDep))) {
-          nexts = nexts :+ ((m, p._2))
+          if (m.hasTarget(target)) {
+            nexts = nexts :+ ((m, p._2))
+          }
         } else {
-          newModules = newModules + p
-        }
-      }
-      val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
-      println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
-      val compileModule = (pair: (Module, B)) => JvmModuleProcessor(
-        root = path,
-        module = pair._1,
-        force = pair._2,
-        par = par,
-        sha3 = sha3,
-        followSymLink = followSymLink,
-        outDir = projectOutDir,
-        javaHome = javaHome,
-        scalaHome = scalaHome,
-        scalacPlugin = scalacPlugin
-      ).run(dm)
-      val r: ISZ[(Proyek.CompileStatus.Type, String)] =
-        if (par) ops.ISZOps(nexts).mParMap(compileModule)
-        else for (next <- nexts) yield compileModule(next)
-      var ok = T
-      for (p <- r) {
-        if (p._1 == CompileStatus.Error) {
-          ok = F
-        }
-        print(p._2)
-      }
-      if (!ok) {
-        return -1
-      }
-      for (p <- ops.ISZOps(nextIds).zip(r)) {
-        val (mid, (status, _)) = p
-        for (mDep <- project.poset.childrenOf(mid).elements) {
-          val compile: B = status == CompileStatus.Compiled
-          newModules.get(mDep) match {
-            case Some(b) => newModules = newModules + mDep ~> (b | compile)
-            case _ => newModules = newModules + mDep ~> compile
+          if (m.hasTarget(target)) {
+            newModules = newModules + p
           }
         }
       }
+      if (nexts.nonEmpty) {
+        val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
+        println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
+        val compileModule = (pair: (Module, B)) => CompileModuleProcessor(
+          root = path,
+          module = pair._1,
+          force = pair._2,
+          par = par,
+          sha3 = sha3,
+          followSymLink = followSymLink,
+          outDir = projectOutDir,
+          javaHome = dm.javaHome,
+          scalaHome = dm.scalaHome,
+          scalacPlugin = dm.scalacPlugin,
+          isJs = isJs
+        ).run(dm)
+        val r: ISZ[(Proyek.CompileStatus.Type, String)] =
+          if (par) ops.ISZOps(nexts).mParMap(compileModule)
+          else for (next <- nexts) yield compileModule(next)
+        var ok = T
+        for (p <- r) {
+          if (p._1 == CompileStatus.Error) {
+            ok = F
+          }
+          print(p._2)
+        }
+        if (!ok) {
+          return -1
+        }
+        for (p <- ops.ISZOps(nextIds).zip(r)) {
+          val (mid, (status, _)) = p
+          for (mDep <- project.poset.childrenOf(mid).elements) {
+            val compile: B = status == CompileStatus.Compiled
+            newModules.get(mDep) match {
+              case Some(b) => newModules = newModules + mDep ~> (b | compile)
+              case _ => newModules = newModules + mDep ~> compile
+            }
+          }
+        }
 
-      println()
-      compiledModuleIds = compiledModuleIds ++ nextIds
+        println()
+        compiledModuleIds = compiledModuleIds ++ nextIds
+      }
       modules = newModules.entries
     }
     return 0
@@ -526,12 +345,6 @@ object Proyek {
           projectName: String,
           dm: DependencyManager,
           outDirName: String,
-          scalacPlugin: Os.Path,
-          scalaVersion: String,
-          scalaHome: Os.Path,
-          sireumJar: Os.Path,
-          javaHome: Os.Path,
-          javaVersion: String,
           jbrVersion: String,
           ideaDir: Os.Path,
           isUltimate: B,
@@ -545,7 +358,7 @@ object Proyek {
       val ideaLib = dotIdea / "libraries"
       ideaLib.mkdirAll()
 
-      def writeLibrary(lib: Lib): Unit = {
+      def writeLibrary(lib: DependencyManager.Lib): Unit = {
         val f = ideaLib / s"${lib.name}.xml"
         val javadocOpt: Option[ST] = lib.javadocOpt match {
           case Some(p) => Some(
@@ -588,7 +401,7 @@ object Proyek {
           st"""<component name="libraryTable">
               |  <library name="Sireum">
               |    <CLASSES>
-              |      <root url="jar://$$USER_HOME$$/${relUri(Os.home, sireumJar)}!/" />
+              |      <root url="jar://$$USER_HOME$$/${relUri(Os.home, dm.sireumJar)}!/" />
               |    </CLASSES>
               |    <JAVADOC />
               |    <SOURCES />
@@ -600,9 +413,9 @@ object Proyek {
       }
 
       {
-        val scalaLibrary = relUri(Os.home, scalaHome / "lib" / "scala-library.jar")
-        val scalaCompiler = relUri(Os.home, scalaHome / "lib" / "scala-compiler.jar")
-        val scalaReflect = relUri(Os.home, scalaHome / "lib" / "scala-reflect.jar")
+        val scalaLibrary = relUri(Os.home, dm.scalaHome / "lib" / "scala-library.jar")
+        val scalaCompiler = relUri(Os.home, dm.scalaHome / "lib" / "scala-compiler.jar")
+        val scalaReflect = relUri(Os.home, dm.scalaHome / "lib" / "scala-reflect.jar")
 
         val f = ideaLib / "Scala.xml"
         f.writeOver(
@@ -621,7 +434,7 @@ object Proyek {
               |      <root url="jar://$$USER_HOME$$/$scalaReflect!/" />
               |    </CLASSES>
               |    <JAVADOC>
-              |      <root url="https://www.scala-lang.org/api/$scalaVersion/" />
+              |      <root url="https://www.scala-lang.org/api/${dm.scalaVersion}/" />
               |    </JAVADOC>
               |    <SOURCES />
               |  </library>
@@ -655,7 +468,7 @@ object Proyek {
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$src"))}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- m.testResources) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$rsc"))}" type="java-test-resource" />"""
-        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
+        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(F, m)) yield
           st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
         val st =
           st"""<?xml version="1.0" encoding="UTF-8"?>
@@ -737,12 +550,12 @@ object Proyek {
     writeModules()
     IVE.writeMisc(dotIdea, outDirName)
     IVE.writeCompiler(dotIdea)
-    IVE.writeScalaCompiler(dotIdea, scalacPlugin)
+    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin)
     IVE.writeScalaSettings(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, projectName)
-    IVE.writeApplicationConfigs(force, ideaDir, isUltimate, javaHome, javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
 
     return 0
   }
@@ -752,10 +565,10 @@ object Proyek {
               project: Project,
               projectName: String,
               dm: DependencyManager,
+              isJs: B,
               orgName: ISZ[String],
               m2Repo: Os.Path,
               version: String,
-              scalaMajorVersion: String,
               symlink: B): Z = {
 
     @strictpure def shouldCopy(p: Os.Path): B = !ignoredPathNames.contains(p.name)
@@ -763,16 +576,17 @@ object Proyek {
     val m2Base = m2Repo /+ orgName
     m2Base.mkdirAll()
 
-    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val proyekDir = getProyekDir(path, outDirName, projectName, isJs)
 
     val projectOutDir = proyekDir / "modules"
 
-    for (m <- project.modules.values if m.publishInfoOpt.nonEmpty) {
+    val target: Target.Type = if (isJs) Target.Js else Target.Jvm
+    for (m <- project.modules.values if m.publishInfoOpt.nonEmpty && m.hasTarget(target)) {
 
       val mOutDir = projectOutDir / m.id
 
       val org = st"${(orgName, ".")}".render
-      val module = s"${m.id}_$scalaMajorVersion"
+      val module = s"${m.id}${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}"
 
       var base = m.basePath
       m.subPathOpt match {
@@ -801,13 +615,13 @@ object Proyek {
         mOutMainDir.zipTo(m2MainJar)
         println(s"Wrote $m2MainJar")
 
-        val m2MainJarSha1 = (m2MainJar.up / s"${m2MainJar.name}.sha1").canon
-        m2MainJarSha1.writeOver(m2MainJar.sha1)
-        println(s"Wrote $m2MainJarSha1")
+        //val m2MainJarSha1 = (m2MainJar.up / s"${m2MainJar.name}.sha1").canon
+        //m2MainJarSha1.writeOver(m2MainJar.sha1)
+        //println(s"Wrote $m2MainJarSha1")
 
-        val m2MainJarMd5 = (m2MainJar.up / s"${m2MainJar.name}.md5").canon
-        m2MainJarMd5.writeOver(m2MainJar.md5)
-        println(s"Wrote $m2MainJarMd5")
+        //val m2MainJarMd5 = (m2MainJar.up / s"${m2MainJar.name}.md5").canon
+        //m2MainJarMd5.writeOver(m2MainJar.md5)
+        //println(s"Wrote $m2MainJarMd5")
       }
 
       def writeSourcesJar(): Unit = {
@@ -836,24 +650,24 @@ object Proyek {
         mOutSourcesDir.zipTo(m2SourcesJar)
         println(s"Wrote $m2SourcesJar")
 
-        val m2SourcesJarSha1 = (m2SourcesJar.up / s"${m2SourcesJar.name}.sha1").canon
-        m2SourcesJarSha1.writeOver(m2SourcesJar.sha1)
-        println(s"Wrote $m2SourcesJarSha1")
+        //val m2SourcesJarSha1 = (m2SourcesJar.up / s"${m2SourcesJar.name}.sha1").canon
+        //m2SourcesJarSha1.writeOver(m2SourcesJar.sha1)
+        //println(s"Wrote $m2SourcesJarSha1")
 
-        val m2SourcesJarMd5 = (m2SourcesJar.up / s"${m2SourcesJar.name}.md5").canon
-        m2SourcesJarMd5.writeOver(m2SourcesJar.md5)
-        println(s"Wrote $m2SourcesJarMd5")
+        //val m2SourcesJarMd5 = (m2SourcesJar.up / s"${m2SourcesJar.name}.md5").canon
+        //m2SourcesJarMd5.writeOver(m2SourcesJar.md5)
+        //println(s"Wrote $m2SourcesJarMd5")
       }
 
       def writePom(): Unit = {
         var deps = ISZ[ST]()
 
         for (mDep <- m.deps) {
-          deps = deps :+ PomTemplate.dep(org, s"${mDep}_$scalaMajorVersion", version)
+          deps = deps :+ PomTemplate.dep(org, s"$mDep${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}", version)
         }
 
         for (ivyDep <- m.ivyDeps) {
-          val cif = Coursier.fetch(ISZ(dm.ivyDeps.get(ivyDep).get))(0)
+          val cif = dm.fetch(ISZ(dm.ivyDeps.get(ivyDep).get))(0)
           deps = deps :+ PomTemplate.dep(cif.org, cif.module, cif.version)
         }
 
@@ -864,7 +678,7 @@ object Proyek {
 
         m2Pom.writeOver(
           PomTemplate.pom(
-            name = st"$org.${m.id}_$scalaMajorVersion".render,
+            name = st"$org.$module".render,
             org = org,
             module = module,
             description = pi.description,
@@ -877,13 +691,13 @@ object Proyek {
         )
         println(s"Wrote $m2Pom")
 
-        val m2PomSha1 = (m2Pom.up / s"${m2Pom.name}.sha1").canon
-        m2PomSha1.writeOver(m2Pom.sha1)
-        println(s"Wrote $m2PomSha1")
+        //val m2PomSha1 = (m2Pom.up / s"${m2Pom.name}.sha1").canon
+        //m2PomSha1.writeOver(m2Pom.sha1)
+        //println(s"Wrote $m2PomSha1")
 
-        val m2PomMd5 = (m2Pom.up / s"${m2Pom.name}.md5").canon
-        m2PomMd5.writeOver(m2Pom.md5)
-        println(s"Wrote $m2PomMd5")
+        //val m2PomMd5 = (m2Pom.up / s"${m2Pom.name}.md5").canon
+        //m2PomMd5.writeOver(m2Pom.md5)
+        //println(s"Wrote $m2PomMd5")
       }
 
       writeMainJar()
@@ -899,13 +713,12 @@ object Proyek {
            project: Project,
            projectName: String,
            dm: DependencyManager,
-           javaHome: Os.Path,
            classNames: ISZ[String],
            suffixes: ISZ[String],
            packageNames: ISZ[String],
            names: ISZ[String]): Z = {
 
-    val proyekDir = getProyekDir(path, outDirName, projectName)
+    val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
 
     var testClasspath = ISZ[String]()
@@ -935,8 +748,9 @@ object Proyek {
       testClasspath = testClasspath :+ lib.main
     }
 
-    val classpath: ISZ[String] =
-      for (cif <- Coursier.fetch(ISZ(s"org.scalatest::scalatest::${dm.versions.get("org.scalatest%%scalatest%%").get}"))) yield cif.path.string
+    val classpath: ISZ[String] = for (
+      cif <- dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaTestKey).replaceAllChars('%', ':')}${dm.scalaTestVersion}"))
+    ) yield cif.path.string
 
     var args = ISZ[String](
       "-classpath", st"${(classpath, Os.pathSep)}".render,
@@ -959,28 +773,16 @@ object Proyek {
     val argFile = proyekDir / "java-test-args"
     argFile.writeOver(st"${(args, "\n")}".render)
 
-    val javaExe = javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
+    val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
     proc"$javaExe @$argFile".at(path).console.runCheck()
 
     return 0
   }
 
 
-  @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String): Os.Path =
-    path / outDirName / s"$projectName"
+  @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String, isJs: B): Os.Path =
+    path / outDirName / s"$projectName${if (isJs) "-js" else ""}"
 
-  @strictpure def libName(cif: CoursierFileInfo): String = s"${cif.org}.${cif.module}"
-
-  @pure def buildClassifiers(withSource: B, withDoc: B): ISZ[CoursierClassifier.Type] = {
-    var classifiers = ISZ[CoursierClassifier.Type](CoursierClassifier.Default)
-    if (withSource) {
-      classifiers = classifiers :+ CoursierClassifier.Sources
-    }
-    if (withDoc) {
-      classifiers = classifiers :+ CoursierClassifier.Javadoc
-    }
-    return classifiers
-  }
 
   @pure def normalizePath(path: String): String = {
     if (Os.isWin) {

@@ -142,6 +142,10 @@ object cli {
     usage = "<options>* <dir>",
     opts = ISZ(
       freshParSha3Opts._1,
+      Opt(name = "js", longKey = "js", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Compile using Scala.js"
+      ),
       freshParSha3Opts._2,
       freshParSha3Opts._3
     ),
@@ -203,7 +207,7 @@ object cli {
     command = "test",
     description = "Proyek test runner",
     header = "Sireum Proyek Test Runner",
-    usage = "<options>* <dir> <package-name>*",
+    usage = "<options>* <dir> <root-package-name>*",
     opts = ISZ(
       Opt(
         name = "classes", longKey = "classes", shortKey = None(),
@@ -230,8 +234,8 @@ object cli {
 
   val group: Group = Group(
     name = "proyek",
-    description = "Project tools",
-    header = "Sireum Proyek",
+    description = "Build tools",
+    header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
     subs = ISZ(assembleTool, compileTool, iveTool, publishTool, testTool)
   )
