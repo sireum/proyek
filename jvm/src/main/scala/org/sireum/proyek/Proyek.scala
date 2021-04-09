@@ -550,7 +550,7 @@ object Proyek {
     writeModules()
     IVE.writeMisc(dotIdea, outDirName)
     IVE.writeCompiler(dotIdea)
-    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin)
+    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, dm.sireumJar)
     IVE.writeScalaSettings(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
@@ -1058,8 +1058,10 @@ object Proyek {
       println(s"Wrote $f")
     }
 
-    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
+    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path, sireumJar: Os.Path): Unit = {
       val f = dotIdea / "scala_compiler.xml"
+      val scalacPluginPath = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}"
+      val sireumJarPath = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(sireumJar)}"
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
@@ -1075,8 +1077,17 @@ object Proyek {
             |      <parameter value="-Xfatal-warnings" />
             |    </parameters>
             |    <plugins>
-            |      <plugin path="$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}" />
+            |      <plugin path="$scalacPluginPath" />
             |    </plugins>
+            |    <profile name="Worksheet" modules="">
+            |      <parameters>
+            |        <parameter value="-classpath" />
+            |        <parameter value="$sireumJarPath" />
+            |      </parameters>
+            |      <plugins>
+            |        <plugin path="$scalacPluginPath" />
+            |      </plugins>
+            |    </profile>
             |  </component>
             |</project>
             |""".render
@@ -1099,11 +1110,14 @@ object Proyek {
             |      </map>
             |    </option>
             |    <option name="metaTrimMethodBodies" value="false" />
-            |    <option name="scFileMode" value="Ammonite" />
             |    <option name="scalaMetaMode" value="Disabled" />
             |    <option name="showNotFoundImplicitArguments" value="false" />
             |    <option name="treatDocCommentAsBlockComment" value="true" />
             |    <option name="treatScratchFilesAsWorksheet" value="false" />
+            |  </component>
+            |  <component name="WorksheetDefaultProjectSettings">
+            |    <option name="compilerProfileName" value="Worksheet" />
+            |    <option name="runType" value="Plain" />
             |  </component>
             |</project>""".render
       )
