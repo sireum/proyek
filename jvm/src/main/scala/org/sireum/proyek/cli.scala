@@ -117,6 +117,7 @@ object cli {
     description = "Proyek jar assembler",
     header = "Sireum Proyek Jar Assembler",
     usage = "<options>* <dir>",
+    usageDescOpt = None(),
     opts = ISZ(
       Opt(name = "jar", longKey = "jar", shortKey = Some('j'),
         tpe = Type.Str(None(), None()),
@@ -140,6 +141,7 @@ object cli {
     description = "Proyek compiler",
     header = "Sireum Proyek Compiler",
     usage = "<options>* <dir>",
+    usageDescOpt = None(),
     opts = ISZ(
       freshParSha3Opts._1,
       Opt(name = "js", longKey = "js", shortKey = None(),
@@ -161,6 +163,7 @@ object cli {
     description = "Sireum IVE proyek generator",
     header = "Sireum IVE Proyek Generator",
     usage = "<options>* <dir>",
+    usageDescOpt = None(),
     opts = ISZ(
       Opt(name = "force", longKey = "force", shortKey = Some('f'),
         tpe = Type.Flag(F),
@@ -183,6 +186,7 @@ object cli {
     description = "Proyek publisher",
     header = "Sireum Proyek Publisher",
     usage = "<options>* <dir> <org.name>",
+    usageDescOpt = None(),
     opts = ISZ(
       Opt(
         name = "m2", longKey = "m2", shortKey = None(),
@@ -208,6 +212,7 @@ object cli {
     description = "Proyek test runner",
     header = "Sireum Proyek Test Runner",
     usage = "<options>* <dir> <root-package-name>*",
+    usageDescOpt = None(),
     opts = ISZ(
       Opt(
         name = "classes", longKey = "classes", shortKey = None(),
