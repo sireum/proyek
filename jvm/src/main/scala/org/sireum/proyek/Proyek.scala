@@ -45,6 +45,181 @@ object Proyek {
                       val sourcesOpt: Option[String],
                       val javadocOpt: Option[String])
 
+  @sig trait ModuleProcessor[T] {
+    @pure def root: Os.Path
+
+    @pure def module: Module
+
+    @pure def force: B
+
+    @pure def par: B
+
+    @pure def sha3: B
+
+    @pure def followSymLink: B
+
+    @pure def outDir: Os.Path
+
+    @pure def fileFilter(file: Os.Path): B
+
+    def process(shouldProcess: B,
+                dm: DependencyManager,
+                sourceFiles: ISZ[Os.Path],
+                testSourceFiles: ISZ[Os.Path]): (T, B)
+
+    def findSources(path: Os.Path): ISZ[Os.Path] = {
+      return if (path.exists) for (p <- Os.Path.walk(path, F, followSymLink, fileFilter _)) yield p else ISZ()
+    }
+
+    @pure def fingerprint(p: Os.Path): String = {
+      if (sha3) {
+        val sha = crypto.SHA3.init256
+        sha.update(p.readU8s)
+        return st"${sha.finalise()}".render
+      } else {
+        return s"${p.lastModified}}"
+      }
+    }
+
+    def run(dm: DependencyManager): T = {
+      val base: String = module.subPathOpt match {
+        case Some(p) => s"${module.basePath}$p"
+        case _ => module.basePath
+      }
+      var sourceFiles = ISZ[Os.Path]()
+      var testSourceFiles = ISZ[Os.Path]()
+      for (source <- module.sources) {
+        sourceFiles = sourceFiles ++ findSources(Os.path(s"$base$source"))
+      }
+      for (testSource <- module.testSources) {
+        testSourceFiles = testSourceFiles ++ findSources(Os.path(s"$base$testSource"))
+      }
+
+      val fingerprintMap = HashMap.empty[String, String] ++ (
+        if (par && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
+          mParMap((p: Os.Path) => (root.relativize(p).string, fingerprint(p)))
+        else for (p <- sourceFiles ++ testSourceFiles) yield (root.relativize(p).string, fingerprint(p))
+        )
+
+      val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
+      val shouldProcess: B = if (!force && fingerprintCache.exists) {
+        val jsonParser = Json.Parser.create(fingerprintCache.read)
+        val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
+        if (jsonParser.errorOpt.isEmpty) map != fingerprintMap else T
+      } else {
+        T
+      }
+
+      val (r, save) = process(shouldProcess, dm, sourceFiles, testSourceFiles)
+      if (save) {
+        fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
+          Json.Printer.printString _).render)
+      }
+      return r
+    }
+  }
+
+  @datatype class JvmModuleProcessor(val root: Os.Path,
+                                     val module: Module,
+                                     val force: B,
+                                     val par: B,
+                                     val sha3: B,
+                                     val followSymLink: B,
+                                     val outDir: Os.Path,
+                                     val javaHome: Os.Path,
+                                     val scalaHome: Os.Path,
+                                     val scalacPlugin: Os.Path) extends ModuleProcessor[(CompileStatus.Type, String)] {
+
+    @strictpure override def fileFilter(file: Os.Path): B = file.ext == "scala" || file.ext == "java"
+
+    override def process(shouldProcess: B,
+                         dm: DependencyManager,
+                         sourceFiles: ISZ[Os.Path],
+                         testSourceFiles: ISZ[Os.Path]): ((CompileStatus.Type, String), B) = {
+
+      if (!shouldProcess) {
+        return ((CompileStatus.Skipped, ""), F)
+      }
+
+      var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
+      classpath = classpath ++ (
+        for (mDep <- dm.computeTransitiveDeps(module) if (outDir / mDep / mainOutDirName).exists) yield
+          outDir / mDep / mainOutDirName
+        )
+
+      val scalacOptions = ISZ[String](
+        "-target:jvm-1.8",
+        "-deprecation",
+        "-Yrangepos",
+        "-Ydelambdafy:method",
+        "-feature",
+        "-unchecked",
+        "-Xfatal-warnings",
+        "-language:postfixOps",
+        s"-Xplugin:$scalacPlugin"
+      )
+      val javacOptions = ISZ[String](
+        "-source", "1.8",
+        "-target", "1.8",
+        "-encoding", "utf8",
+        "-XDignore.symbol.file",
+        "-Xlint:-options"
+      )
+
+      val mainOutDir = outDir / module.id / mainOutDirName
+      classpath = mainOutDir +: classpath
+      mainOutDir.removeAll()
+      mainOutDir.mkdirAll()
+      val (mainOk, mainOut) = runCompilers(
+        mid = module.id,
+        category = "main",
+        javaHome = javaHome,
+        scalaHome = scalaHome,
+        scalacOptions = scalacOptions,
+        javacOptions = javacOptions,
+        classpath = classpath,
+        sourceFiles = sourceFiles,
+        outDir = mainOutDir
+      )
+
+      if (mainOk) {
+        if (testSourceFiles.nonEmpty) {
+          val testOutDir = outDir / module.id / testOutDirName
+
+          classpath = classpath ++ (
+            for (mDep <- dm.computeTransitiveDeps(module) if (outDir / mDep / testOutDirName).exists) yield
+              outDir / mDep / testOutDirName
+            )
+          classpath = testOutDir +: classpath
+          testOutDir.removeAll()
+          testOutDir.mkdirAll()
+
+          val (testOk, testOut) = runCompilers(
+            mid = module.id,
+            category = "test",
+            javaHome = javaHome,
+            scalaHome = scalaHome,
+            scalacOptions = scalacOptions,
+            javacOptions = javacOptions,
+            classpath = classpath,
+            sourceFiles = testSourceFiles,
+            outDir = testOutDir
+          )
+          if (testOk) {
+            return ((CompileStatus.Compiled, s"$mainOut$testOut"), T)
+          } else {
+            return ((CompileStatus.Error, s"$mainOut$testOut"), F)
+          }
+        } else {
+          return ((CompileStatus.Compiled, mainOut), T)
+        }
+      } else {
+        return ((CompileStatus.Error, mainOut), F)
+      }
+    }
+
+  }
+
   @record class DependencyManager(project: Project, versions: HashSMap[String, String], withSource: B, withDoc: B) {
 
     val ivyDeps: HashSMap[String, String] = {
@@ -167,11 +342,8 @@ object Proyek {
   val ignoredPathNames: HashSet[String] = HashSet ++ ISZ[String](
     ".git", ".DS_Store"
   )
-  val cacheSuffix: String = "-inc-cache.zip"
   val mainOutDirName: String = "classes"
-  val mainCacheName: String = s"$mainOutDirName$cacheSuffix"
   val testOutDirName: String = "test-classes"
-  val testCacheName: String = s"$testOutDirName$cacheSuffix"
   val sourcesOutDirName: String = "sources"
   val metaInf: String = "META-INF"
   val manifestMf: String = "MANIFEST.MF"
@@ -286,146 +458,6 @@ object Proyek {
         org.sireum.project.JSON.Printer.printModule _).render)
     }
 
-    val scalacOptions = ISZ[String](
-      "-target:jvm-1.8",
-      "-deprecation",
-      "-Yrangepos",
-      "-Ydelambdafy:method",
-      "-feature",
-      "-unchecked",
-      "-Xfatal-warnings",
-      "-language:postfixOps",
-      s"-Xplugin:$scalacPlugin"
-    )
-    val javacOptions = ISZ[String](
-      "-source", "1.8",
-      "-target", "1.8",
-      "-encoding", "utf8",
-      "-XDignore.symbol.file",
-      "-Xlint:-options"
-    )
-
-    def compileModule(pair: (Module, B)): (CompileStatus.Type, String) = {
-
-      @strictpure def isJavaOrScala(p: Os.Path): B = p.ext == "scala" || p.ext == "java"
-
-      def findSources(p: Os.Path): ISZ[Os.Path] = {
-        return if (p.exists) for (p <- Os.Path.walk(p, F, followSymLink, isJavaOrScala _)) yield p else ISZ()
-      }
-
-      @pure def fingerprint(p: Os.Path): String = {
-        if (sha3) {
-          val sha = crypto.SHA3.init256
-          sha.update(p.readU8s)
-          return st"${sha.finalise()}".render
-        } else {
-          return s"${p.lastModified}}"
-        }
-      }
-
-      val (m, forceCompile) = pair
-
-      val base: String = m.subPathOpt match {
-        case Some(p) => s"${m.basePath}$p"
-        case _ => m.basePath
-      }
-      var sourceFiles = ISZ[Os.Path]()
-      var testSourceFiles = ISZ[Os.Path]()
-      for (source <- m.sources) {
-        sourceFiles = sourceFiles ++ findSources(Os.path(s"$base$source"))
-      }
-      for (testSource <- m.testSources) {
-        testSourceFiles = testSourceFiles ++ findSources(Os.path(s"$base$testSource"))
-      }
-
-      val fileTimestampMap = HashMap.empty[String, String] ++ (
-        if (par && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
-          mParMap((p: Os.Path) => (path.relativize(p).string, fingerprint(p)))
-        else (for (p <- sourceFiles ++ testSourceFiles) yield (path.relativize(p).string, fingerprint(p)))
-        )
-
-      val fileTimestampCache = projectOutDir / s"${m.id}${if (sha3) ".sha3" else ""}.json"
-
-      val compile: B = if (!forceCompile && fileTimestampCache.exists) {
-        val jsonParser = Json.Parser.create(fileTimestampCache.read)
-        val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
-        if (jsonParser.errorOpt.isEmpty) map != fileTimestampMap else T
-      } else {
-        T
-      }
-
-      def compileModuleH(): (CompileStatus.Type, String) = {
-        var classpath: ISZ[Os.Path] = (for (lib <- dm.fetchTransitiveLibs(m)) yield Os.path(lib.main))
-        classpath = classpath ++ (
-          for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / mainOutDirName).exists) yield
-            projectOutDir / mDep / mainOutDirName
-          )
-
-        val mainOutDir = projectOutDir / m.id / mainOutDirName
-        classpath = mainOutDir +: classpath
-        mainOutDir.removeAll()
-        mainOutDir.mkdirAll()
-        val (mainOk, mainOut) = runCompilers(
-          mid = m.id,
-          category = "main",
-          javaHome = javaHome,
-          scalaHome = scalaHome,
-          scalacOptions = scalacOptions,
-          javacOptions = javacOptions,
-          classpath = classpath,
-          sourceFiles = sourceFiles,
-          outDir = mainOutDir
-        )
-
-        if (mainOk) {
-          if (testSourceFiles.nonEmpty) {
-            val testOutDir = projectOutDir / m.id / testOutDirName
-
-            classpath = classpath ++ (
-              for (mDep <- dm.computeTransitiveDeps(m) if (projectOutDir / mDep / testOutDirName).exists) yield
-                projectOutDir / mDep / testOutDirName
-              )
-            classpath = testOutDir +: classpath
-            testOutDir.removeAll()
-            testOutDir.mkdirAll()
-
-            val (testOk, testOut) = runCompilers(
-              mid = m.id,
-              category = "test",
-              javaHome = javaHome,
-              scalaHome = scalaHome,
-              scalacOptions = scalacOptions,
-              javacOptions = javacOptions,
-              classpath = classpath,
-              sourceFiles = testSourceFiles,
-              outDir = testOutDir
-            )
-            if (testOk) {
-              return (CompileStatus.Compiled, s"$mainOut$testOut")
-            } else {
-              return (CompileStatus.Error, s"$mainOut$testOut")
-            }
-          } else {
-            return (CompileStatus.Compiled, mainOut)
-          }
-        } else {
-          return (CompileStatus.Error, mainOut)
-        }
-      }
-
-      if (compile) {
-        val r = compileModuleH()
-        if (r._1 != CompileStatus.Error) {
-          fileTimestampCache.writeOver(Json.Printer.printHashMap(F, fileTimestampMap, Json.Printer.printString _,
-            Json.Printer.printString _).render)
-        }
-        return r
-      } else {
-        return (CompileStatus.Skipped, "")
-      }
-
-    }
-
     if (fresh) {
       projectOutDir.removeAll()
     }
@@ -446,8 +478,20 @@ object Proyek {
       }
       val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
       println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
+      val compileModule = (pair: (Module, B)) => JvmModuleProcessor(
+        root = path,
+        module = pair._1,
+        force = pair._2,
+        par = par,
+        sha3 = sha3,
+        followSymLink = followSymLink,
+        outDir = projectOutDir,
+        javaHome = javaHome,
+        scalaHome = scalaHome,
+        scalacPlugin = scalacPlugin
+      ).run(dm)
       val r: ISZ[(Proyek.CompileStatus.Type, String)] =
-        if (par) ops.ISZOps(nexts).mParMap(compileModule _)
+        if (par) ops.ISZOps(nexts).mParMap(compileModule)
         else for (next <- nexts) yield compileModule(next)
       var ok = T
       for (p <- r) {
@@ -536,7 +580,8 @@ object Proyek {
 
       for (lib <- dm.libMap.values) {
         writeLibrary(lib)
-      };
+      }
+
       {
         val f = ideaLib / "Sireum.xml"
         f.writeOver(
@@ -552,7 +597,8 @@ object Proyek {
               |""".render
         )
         println(s"Wrote $f")
-      };
+      }
+
       {
         val scalaLibrary = relUri(Os.home, scalaHome / "lib" / "scala-library.jar")
         val scalaCompiler = relUri(Os.home, scalaHome / "lib" / "scala-compiler.jar")
@@ -647,7 +693,8 @@ object Proyek {
           newModuleIds = newModuleIds ++ project.poset.childrenOf(mid).elements
         }
         moduleIds = newModuleIds.elements
-      };
+      }
+
       {
         val f = dotIdeaModules / s"$projectName.iml"
         f.writeOver(
@@ -895,8 +942,11 @@ object Proyek {
       "-classpath", st"${(classpath, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
-      "-R", st""""${(if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
-        else testClasspath, " ")}"""".render
+      "-R",
+      st""""${
+        (if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
+        else testClasspath, " ")
+      }"""".render
     )
     args = args ++ (for (args2 <- for (name <- classNames) yield
       ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
@@ -1372,14 +1422,14 @@ object Proyek {
   }
 
   def runCompilers(mid: String,
-                    category: String,
-                    javaHome: Os.Path,
-                    scalaHome: Os.Path,
-                    scalacOptions: ISZ[String],
-                    javacOptions: ISZ[String],
-                    classpath: ISZ[Os.Path],
-                    sourceFiles: ISZ[Os.Path],
-                    outDir: Os.Path): (B, String) = {
+                   category: String,
+                   javaHome: Os.Path,
+                   scalaHome: Os.Path,
+                   scalacOptions: ISZ[String],
+                   javacOptions: ISZ[String],
+                   classpath: ISZ[Os.Path],
+                   sourceFiles: ISZ[Os.Path],
+                   outDir: Os.Path): (B, String) = {
 
     if (sourceFiles.isEmpty) {
       return (T, "")
@@ -1422,7 +1472,7 @@ object Proyek {
         val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
         val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
-        val r = proc"$javac @${argFile.name}".at(argFile.up.canon).console.run()
+        val r = proc"$javac @${argFile.name}".at(argFile.up.canon).run()
         sb = sb :+ st"${r.out}"
         sb = sb :+ st"${r.err}"
         return (r.ok, st"${(sb, "")}".render)
