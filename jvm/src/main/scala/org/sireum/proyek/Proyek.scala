@@ -67,7 +67,7 @@ object Proyek {
         return ((CompileStatus.Skipped, ""), F)
       }
 
-      var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(F, module)) yield Os.path(lib.main)
+      var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
       if (isJs) {
         classpath = dm.fetch(ISZ(s"org.scala-js::scalajs-library:${dm.scalaJsVersion}"))(0).path +: classpath
       }
@@ -468,7 +468,7 @@ object Proyek {
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$src"))}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- m.testResources) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$rsc"))}" type="java-test-resource" />"""
-        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(F, m)) yield
+        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
           st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
         val st =
           st"""<?xml version="1.0" encoding="UTF-8"?>
@@ -594,6 +594,33 @@ object Proyek {
         case _ =>
       }
 
+      val pom: String = {
+        var deps = ISZ[ST]()
+
+        for (mDep <- m.deps) {
+          deps = deps :+ PomTemplate.dep(org, s"$mDep${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}", version)
+        }
+
+        for (lib <- dm.fetchDiffLibs(m)) {
+          deps = deps :+ PomTemplate.dep(lib.org, lib.module, lib.version)
+        }
+
+        val pi = m.publishInfoOpt.get
+
+        PomTemplate.pom(
+          name = st"$org.$module".render,
+          org = org,
+          module = module,
+          description = pi.description,
+          version = version,
+          url = pi.url,
+          licenses = for (l <- pi.licenses) yield PomTemplate.license(l.name, l.url, l.distribution),
+          developers = for (d <- pi.developers) yield PomTemplate.dev(d.id, d.name),
+          dependencies = deps
+        ).render
+
+      }
+
       def writeMainJar(): Unit = {
         val mOutMainDir = mOutDir / mainOutDirName
 
@@ -610,18 +637,13 @@ object Proyek {
               |""".render
         )
 
+        val mainPomXml = mOutMainDir / metaInf / org / module / "pom.xml"
+        mainPomXml.writeOver(pom)
+
         val m2MainJar = m2Base / module / version / s"$module-$version.jar"
         m2MainJar.up.mkdirAll()
         mOutMainDir.zipTo(m2MainJar)
         println(s"Wrote $m2MainJar")
-
-        //val m2MainJarSha1 = (m2MainJar.up / s"${m2MainJar.name}.sha1").canon
-        //m2MainJarSha1.writeOver(m2MainJar.sha1)
-        //println(s"Wrote $m2MainJarSha1")
-
-        //val m2MainJarMd5 = (m2MainJar.up / s"${m2MainJar.name}.md5").canon
-        //m2MainJarMd5.writeOver(m2MainJar.md5)
-        //println(s"Wrote $m2MainJarMd5")
       }
 
       def writeSourcesJar(): Unit = {
@@ -649,55 +671,16 @@ object Proyek {
         m2SourcesJar.up.mkdirAll()
         mOutSourcesDir.zipTo(m2SourcesJar)
         println(s"Wrote $m2SourcesJar")
-
-        //val m2SourcesJarSha1 = (m2SourcesJar.up / s"${m2SourcesJar.name}.sha1").canon
-        //m2SourcesJarSha1.writeOver(m2SourcesJar.sha1)
-        //println(s"Wrote $m2SourcesJarSha1")
-
-        //val m2SourcesJarMd5 = (m2SourcesJar.up / s"${m2SourcesJar.name}.md5").canon
-        //m2SourcesJarMd5.writeOver(m2SourcesJar.md5)
-        //println(s"Wrote $m2SourcesJarMd5")
       }
 
       def writePom(): Unit = {
-        var deps = ISZ[ST]()
-
-        for (mDep <- m.deps) {
-          deps = deps :+ PomTemplate.dep(org, s"$mDep${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}", version)
-        }
-
-        for (ivyDep <- m.ivyDeps) {
-          val cif = dm.fetch(ISZ(dm.ivyDeps.get(ivyDep).get))(0)
-          deps = deps :+ PomTemplate.dep(cif.org, cif.module, cif.version)
-        }
-
         val m2Pom = m2Base / module / version / s"$module-$version.pom"
         m2Pom.up.mkdirAll()
 
         val pi = m.publishInfoOpt.get
 
-        m2Pom.writeOver(
-          PomTemplate.pom(
-            name = st"$org.$module".render,
-            org = org,
-            module = module,
-            description = pi.description,
-            version = version,
-            url = pi.url,
-            licenses = for (l <- pi.licenses) yield PomTemplate.license(l.name, l.url, l.distribution),
-            developers = for (d <- pi.developers) yield PomTemplate.dev(d.id, d.name),
-            dependencies = deps
-          ).render
-        )
+        m2Pom.writeOver(pom)
         println(s"Wrote $m2Pom")
-
-        //val m2PomSha1 = (m2Pom.up / s"${m2Pom.name}.sha1").canon
-        //m2PomSha1.writeOver(m2Pom.sha1)
-        //println(s"Wrote $m2PomSha1")
-
-        //val m2PomMd5 = (m2Pom.up / s"${m2Pom.name}.md5").canon
-        //m2PomMd5.writeOver(m2Pom.md5)
-        //println(s"Wrote $m2PomMd5")
       }
 
       writeMainJar()
@@ -1190,6 +1173,7 @@ object Proyek {
       st"""<developer>
           |  <id>$id</id>
           |  <name>$name</name>
+          |  <url>https://github.com/$id</url>
           |</developer>"""
 
     @strictpure def dep(org: String, module: String, version: String): ST =
@@ -1199,42 +1183,49 @@ object Proyek {
           |  <version>$version</version>
           |</dependency>"""
 
-    @strictpure def pom(name: String,
-                        org: String,
-                        module: String,
-                        description: String,
-                        version: String,
-                        url: String,
-                        licenses: ISZ[ST],
-                        developers: ISZ[ST],
-                        dependencies: ISZ[ST]): ST =
-      st"""<?xml version="1.0" encoding="UTF-8"?>
-          |<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-          |         xmlns="http://maven.apache.org/POM/4.0.0"
-          |         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-          |  <modelVersion>4.0.0</modelVersion>
-          |  <name>$name</name>
-          |  <groupId>$org</groupId>
-          |  <artifactId>$module</artifactId>
-          |  <packaging>jar</packaging>
-          |  <description>$description</description>
-          |  <version>$version</version>
-          |  <url>https://$url</url>
-          |  <licenses>
-          |    ${(licenses, "\n")}
-          |  </licenses>
-          |  <scm>
-          |    <connection>scm:git://$url.git</connection>
-          |    <url>git://$url.git</url>
-          |  </scm>
-          |  <developers>
-          |    ${(developers, "\n")}
-          |  </developers>
-          |  <dependencies>
-          |    ${(dependencies, "\n")}
-          |  </dependencies>
-          |</project>
-          |"""
+    @pure def pom(name: String,
+                  org: String,
+                  module: String,
+                  description: String,
+                  version: String,
+                  url: String,
+                  licenses: ISZ[ST],
+                  developers: ISZ[ST],
+                  dependencies: ISZ[ST]): ST = {
+      val urlOps = ops.StringOps(url)
+      val i = urlOps.indexOf('/')
+      val sshUrl = s"${urlOps.substring(0, i)}:${urlOps.substring(i + 1, url.size)}"
+      val r =
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+            |         xmlns="http://maven.apache.org/POM/4.0.0"
+            |         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            |  <modelVersion>4.0.0</modelVersion>
+            |  <name>$name</name>
+            |  <groupId>$org</groupId>
+            |  <artifactId>$module</artifactId>
+            |  <packaging>jar</packaging>
+            |  <description>$description</description>
+            |  <version>$version</version>
+            |  <url>https://$url</url>
+            |  <licenses>
+            |    ${(licenses, "\n")}
+            |  </licenses>
+            |  <scm>
+            |    <connection>scm:git:git://$url.git</connection>
+            |    <developerConnection>scm:git:ssh://git@$sshUrl.git</developerConnection>
+            |    <url>git://$url.git</url>
+            |  </scm>
+            |  <developers>
+            |    ${(developers, "\n")}
+            |  </developers>
+            |  <dependencies>
+            |    ${(dependencies, "\n")}
+            |  </dependencies>
+            |</project>
+            |"""
+      return r
+    }
   }
 
   def runCompilers(mid: String,
