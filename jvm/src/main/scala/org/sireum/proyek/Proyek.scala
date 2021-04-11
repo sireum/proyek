@@ -27,7 +27,7 @@
 package org.sireum.proyek
 
 import org.sireum._
-import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, Target}
+import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, ProjectUtil, Target}
 
 
 object Proyek {
@@ -47,6 +47,8 @@ object Proyek {
                                          val outDir: Os.Path,
                                          val javaHome: Os.Path,
                                          val scalaHome: Os.Path,
+                                         val javacOptions: ISZ[String],
+                                         val scalacOptions: ISZ[String],
                                          val scalacPlugin: Os.Path,
                                          val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String)] {
 
@@ -81,24 +83,7 @@ object Proyek {
         plugins = plugins :+
           dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaJsKey).replaceAllChars('%', ':')}${dm.scalaJsVersion}"))(0).path
       }
-      val scalacOptions = ISZ[String](
-        "-target:jvm-1.8",
-        "-deprecation",
-        "-Yrangepos",
-        "-Ydelambdafy:method",
-        "-feature",
-        "-unchecked",
-        "-Xfatal-warnings",
-        "-language:postfixOps",
-        st"-Xplugin:${(plugins, ",")}".render
-      )
-      val javacOptions = ISZ[String](
-        "-source", "1.8",
-        "-target", "1.8",
-        "-encoding", "utf8",
-        "-XDignore.symbol.file",
-        "-Xlint:-options"
-      )
+      val scOptions = scalacOptions :+ st"-Xplugin:${(plugins, ",")}".render
 
       val mainOutDir = outDir / module.id / mainOutDirName
       classpath = mainOutDir +: classpath
@@ -109,7 +94,7 @@ object Proyek {
         category = "main",
         javaHome = javaHome,
         scalaHome = scalaHome,
-        scalacOptions = scalacOptions,
+        scalacOptions = scOptions,
         javacOptions = javacOptions,
         classpath = classpath,
         sourceFiles = sourceFiles,
@@ -133,7 +118,7 @@ object Proyek {
             category = "test",
             javaHome = javaHome,
             scalaHome = scalaHome,
-            scalacOptions = scalacOptions,
+            scalacOptions = scOptions,
             javacOptions = javacOptions,
             classpath = classpath,
             sourceFiles = testSourceFiles,
@@ -226,6 +211,8 @@ object Proyek {
               project: Project,
               projectName: String,
               dm: DependencyManager,
+              javacOptions: ISZ[String],
+              scalacOptions: ISZ[String],
               isJs: B,
               followSymLink: B,
               fresh: B,
@@ -247,15 +234,12 @@ object Proyek {
       T
     }
 
-    val projectNoPub: Project = project(
-      modules = HashSMap ++ (for (p <- project.modules.entries) yield (p._1, p._2(publishInfoOpt = None())))
-    )
+    val projectNoPub = project.stripPubInfo
 
     if (!compileAll) {
       if (projectCache.exists) {
-        val parser = org.sireum.project.JSON.Parser(projectCache.read)
-        val m = parser.parser.parseHashSMap(parser.parser.parseString _, parser.parseModule _)
-        compileAll = parser.errorOpt.nonEmpty || m != projectNoPub.modules
+        val pcOpt = ProjectUtil.load(projectCache)
+        compileAll = pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
       } else {
         compileAll = T
       }
@@ -265,8 +249,7 @@ object Proyek {
       versionsCache.writeOver(
         Json.Printer.printHashSMap(F, dm.versions, Json.Printer.printString _, Json.Printer.printString _).render
       )
-      projectCache.writeOver(Json.Printer.printHashSMap(F, projectNoPub.modules, Json.Printer.printString _,
-        org.sireum.project.JSON.Printer.printModule _).render)
+      ProjectUtil.store(projectCache, projectNoPub)
     }
 
     if (fresh) {
@@ -305,6 +288,8 @@ object Proyek {
           outDir = projectOutDir,
           javaHome = dm.javaHome,
           scalaHome = dm.scalaHome,
+          javacOptions = javacOptions,
+          scalacOptions = scalacOptions,
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
         ).run(dm)
@@ -677,8 +662,6 @@ object Proyek {
         val m2Pom = m2Base / module / version / s"$module-$version.pom"
         m2Pom.up.mkdirAll()
 
-        val pi = m.publishInfoOpt.get
-
         m2Pom.writeOver(pom)
         println(s"Wrote $m2Pom")
       }
@@ -691,11 +674,60 @@ object Proyek {
     return 0
   }
 
+  def run(path: Os.Path,
+          outDirName: String,
+          project: Project,
+          projectName: String,
+          dm: DependencyManager,
+          javaOptions: ISZ[String],
+          dir: Os.Path,
+          className: String,
+          args: ISZ[String]): Z = {
+
+    val proyekDir = getProyekDir(path, outDirName, projectName, F)
+    val projectOutDir = proyekDir / "modules"
+
+    var classpath = ISZ[String]()
+
+    for (m <- project.modules.values) {
+      val mDir = projectOutDir / m.id / mainOutDirName
+      if (mDir.exists) {
+        classpath = classpath :+ mDir.string
+      }
+
+      var base = m.basePath
+      m.subPathOpt match {
+        case Some(subPath) => base = s"$base$subPath"
+        case _ =>
+      }
+      classpath = classpath ++ (for (r <- m.resources) yield s"$base$r")
+    }
+
+    for (lib <- dm.libMap.values) {
+      classpath = classpath :+ lib.main
+    }
+
+    classpath = classpath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
+
+    val javaArgs = javaOptions ++
+      ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
+      args
+    val argFile = proyekDir / "java-run-args"
+    argFile.writeOver(
+      st"${(javaArgs, "\n")}".render)
+
+    val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
+    proc"$javaExe @$argFile".at(dir).console.runCheck()
+
+    return 0
+  }
+
   def test(path: Os.Path,
            outDirName: String,
            project: Project,
            projectName: String,
            dm: DependencyManager,
+           javaOptions: ISZ[String],
            classNames: ISZ[String],
            suffixes: ISZ[String],
            packageNames: ISZ[String],
@@ -727,6 +759,8 @@ object Proyek {
       testClasspath = testClasspath ++ (for (r <- m.resources ++ m.testResources) yield s"$base$r")
     }
 
+    testClasspath = testClasspath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
+
     for (lib <- dm.libMap.values) {
       testClasspath = testClasspath :+ lib.main
     }
@@ -735,7 +769,7 @@ object Proyek {
       cif <- dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaTestKey).replaceAllChars('%', ':')}${dm.scalaTestVersion}"))
     ) yield cif.path.string
 
-    var args = ISZ[String](
+    var args = javaOptions ++ ISZ[String](
       "-classpath", st"${(classpath, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",

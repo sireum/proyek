@@ -38,17 +38,17 @@ object cli {
         tpe = Type.Path(F, None()),
         description = "Ivy cache directory (defaults to couriser's default cache directory)"
       ),
-      Opt(name = "sources", longKey = "no-sources", shortKey = None(),
-        tpe = Type.Flag(T),
-        description = "Disable retrieval of source files from Ivy dependencies"
-      ),
       Opt(name = "docs", longKey = "no-docs", shortKey = None(),
         tpe = Type.Flag(T),
         description = "Disable retrieval of javadoc files from Ivy dependencies"
       ),
+      Opt(name = "sources", longKey = "no-sources", shortKey = None(),
+        tpe = Type.Flag(T),
+        description = "Disable retrieval of source files from Ivy dependencies"
+      ),
       Opt(name = "repositories", longKey = "repositories", shortKey = Some('r'),
         tpe = Type.Str(sep = Some(','), default = None()),
-        description = "Disable retrieval of javadoc files from Ivy dependencies"
+        description = "Additional repository URLs to retrieve Ivy dependencies from"
       )
     )
   )
@@ -72,6 +72,10 @@ object cli {
         tpe = Type.Path(F, None()),
         description = "The project.cmd file accepting the 'json' argument (defaults to <dir>${Os.fileSep}bin${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)"
       ),
+      Opt(name = "slice", longKey = "slice", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Slice the project starting from the given module IDs and their dependencies"
+      ),
       Opt(name = "symlink", longKey = "symlink", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Follow symbolic link when searching for files"
@@ -83,7 +87,11 @@ object cli {
     )
   )
 
-  val freshParSha3Opts: (Opt, Opt, Opt) = (
+  val javacFreshParScalacSha3Opts: ISZ[Opt] = ISZ(
+    Opt(name = "javac", longKey = "javac", shortKey = None(),
+      tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options")),
+      description = "Javac options"
+    ),
     Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
       tpe = Type.Flag(F),
       description = "Fresh compilation from a clean slate"
@@ -91,6 +99,10 @@ object cli {
     Opt(name = "par", longKey = "par", shortKey = Some('p'),
       tpe = Type.Flag(F),
       description = "Enable parallelization"
+    ),
+    Opt(name = "scalac", longKey = "scalac", shortKey = None(),
+      tpe = Type.Str(Some(','), Some("-target:jvm-1.8, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Xfatal-warnings, -language:postfixOps")),
+      description = "Scalac options"
     ),
     Opt(name = "sha3", longKey = "sha3", shortKey = None(),
       tpe = Type.Flag(F),
@@ -100,15 +112,11 @@ object cli {
 
   val compileOptGroup: OptGroup = OptGroup(
     name = "Compilation",
-    opts = ISZ(
-      freshParSha3Opts._1,
-      freshParSha3Opts._2,
+    opts = javacFreshParScalacSha3Opts :+
       Opt(name = "skipCompile", longKey = "skip-compile", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Skip compilation"
-      ),
-      freshParSha3Opts._3
-    )
+      )
   )
 
   val assembleTool: Tool = Tool(
@@ -123,7 +131,7 @@ object cli {
         tpe = Type.Str(None(), None()),
         description = "The assembled jar filename (defaults to the project name)"
       ),
-      Opt(name = "mainClass", longKey = "main", shortKey = Some('m'),
+      Opt(name = "mainClass ", longKey = "main", shortKey = Some('m'),
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"
       )
@@ -142,15 +150,11 @@ object cli {
     header = "Sireum Proyek Compiler",
     usage = "<options>* <dir>",
     usageDescOpt = None(),
-    opts = ISZ(
-      freshParSha3Opts._1,
+    opts = javacFreshParScalacSha3Opts :+
       Opt(name = "js", longKey = "js", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Compile using Scala.js"
       ),
-      freshParSha3Opts._2,
-      freshParSha3Opts._3
-    ),
     groups = ISZ(
       projectOptGroup,
       ivyOptGroup
@@ -206,6 +210,31 @@ object cli {
     )
   )
 
+  val runTool: Tool = Tool(
+    name = "run",
+    command = "run",
+    description = "Proyek program runner",
+    header = "Sireum Proyek Program Runner",
+    usage = "<options>* <dir> <class-name> <arg>*",
+    usageDescOpt = None(),
+    opts = ISZ(
+      Opt(
+        name = "dir", longKey = "dir", shortKey = Some('d'),
+        tpe = Type.Path(F, None()),
+        description = "Working directory (defaults to current working directory)"
+      ),
+      Opt(name = "java", longKey = "java", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Java options"
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      compileOptGroup,
+      ivyOptGroup
+    )
+  )
+
   val testTool: Tool = Tool(
     name = "test",
     command = "test",
@@ -219,15 +248,19 @@ object cli {
         tpe = Type.Str(Some(','), None()),
         description = "Specific fully-qualified test class names to run"
       ),
-      Opt(
-        name = "suffixes", longKey = "suffixes", shortKey = None(),
+      Opt(name = "java", longKey = "java", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
-        description = "Specific test class name suffixes to run"
+        description = "Java options"
       ),
       Opt(
         name = "packages", longKey = "packages", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Specific fully-qualified test package names to run"
+      ),
+      Opt(
+        name = "suffixes", longKey = "suffixes", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Specific test class name suffixes to run"
       )
     ),
     groups = ISZ(
@@ -242,7 +275,7 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, publishTool, testTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, publishTool, runTool, testTool)
   )
 
 }
