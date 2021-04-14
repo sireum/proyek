@@ -226,28 +226,38 @@ object Proyek {
     val versionsCache = proyekDir / "versions.json"
     val projectCache = proyekDir / "proyek.json"
 
-    var compileAll: B = if (versionsCache.exists) {
+    val versions = dm.versions
+
+    val versionsChanged: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
       val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
-      jsonParser.errorOpt.nonEmpty || m != dm.versions
+      jsonParser.errorOpt.nonEmpty || m != versions
     } else {
       T
     }
 
-    val projectNoPub = project.stripPubInfo
-
-    if (!compileAll) {
-      if (projectCache.exists) {
-        val pcOpt = ProjectUtil.load(projectCache)
-        compileAll = pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
-      } else {
-        compileAll = T
-      }
+    if (versionsChanged) {
+      println("Dependency version changes detected ...")
+      println()
     }
 
-    if (compileAll) {
+    val projectNoPub = project.stripPubInfo
+
+    val projectChanged: B = if (projectCache.exists) {
+      val pcOpt = ProjectUtil.load(projectCache)
+      pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
+    } else {
+      T
+    }
+
+    if (projectChanged) {
+      println("Project changes detected ...")
+      println()
+    }
+
+    if (versionsChanged || projectChanged) {
       versionsCache.writeOver(
-        Json.Printer.printHashSMap(F, dm.versions, Json.Printer.printString _, Json.Printer.printString _).render
+        Json.Printer.printHashSMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render
       )
       ProjectUtil.store(projectCache, projectNoPub)
     }
@@ -258,7 +268,7 @@ object Proyek {
     projectOutDir.mkdirAll()
 
     val target: Target.Type = if (isJs) Target.Js else Target.Jvm
-    var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
+    var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, versionsChanged)
     var compiledModuleIds = HashSet.empty[String]
     while (modules.nonEmpty) {
       var nexts = ISZ[(Module, B)]()
