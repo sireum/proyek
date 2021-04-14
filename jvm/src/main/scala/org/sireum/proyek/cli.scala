@@ -56,6 +56,10 @@ object cli {
   val projectOptGroup: OptGroup = OptGroup(
     name = "Project",
     opts = ISZ(
+      Opt(name = "ignoreRuntime", longKey = "ignore-runtime", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Ignore runtime library dependency version when detecting changes"
+      ),
       Opt(name = "json", longKey = "json", shortKey = None(),
         tpe = Type.Path(F, None()),
         description = "The JSON file to load project definitions from (mutually exclusive with the 'project' option)"

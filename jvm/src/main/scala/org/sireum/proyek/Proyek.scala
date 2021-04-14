@@ -217,7 +217,8 @@ object Proyek {
               followSymLink: B,
               fresh: B,
               par: B,
-              sha3: B): Z = {
+              sha3: B,
+              ignoreRuntime: B): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName, isJs)
 
@@ -226,7 +227,10 @@ object Proyek {
     val versionsCache = proyekDir / "versions.json"
     val projectCache = proyekDir / "proyek.json"
 
-    val versions = dm.versions
+    var versions = dm.versions
+    if (ignoreRuntime) {
+      versions = versions -- ISZ(DependencyManager.libraryKey)
+    }
 
     val versionsChanged: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
