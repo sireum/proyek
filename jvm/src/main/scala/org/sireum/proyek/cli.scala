@@ -36,7 +36,7 @@ object cli {
     opts = ISZ(
       Opt(name = "cache", longKey = "cache", shortKey = Some('c'),
         tpe = Type.Path(F, None()),
-        description = "Ivy cache directory (defaults to couriser's default cache directory)"
+        description = "Ivy cache directory (defaults to Coursier's default cache directory)"
       ),
       Opt(name = "docs", longKey = "no-docs", shortKey = None(),
         tpe = Type.Flag(T),
