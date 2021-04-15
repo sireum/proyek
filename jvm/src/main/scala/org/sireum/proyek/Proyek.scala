@@ -259,7 +259,9 @@ object Proyek {
       println()
     }
 
-    if (versionsChanged || projectChanged) {
+    val compileAll = versionsChanged || projectChanged
+
+    if (compileAll) {
       versionsCache.writeOver(
         Json.Printer.printHashSMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render
       )
@@ -272,7 +274,7 @@ object Proyek {
     projectOutDir.mkdirAll()
 
     val target: Target.Type = if (isJs) Target.Js else Target.Jvm
-    var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, versionsChanged)
+    var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
     var compiledModuleIds = HashSet.empty[String]
     while (modules.nonEmpty) {
       var nexts = ISZ[(Module, B)]()
@@ -453,20 +455,16 @@ object Proyek {
       def writeModule(m: Module): Unit = {
         moduleEntries = moduleEntries :+
           st"""<module fileurl="file://$$PROJECT_DIR$$/.idea_modules/${m.id}.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea_modules${Os.fileSep}${m.id}.iml" />"""
-        val basePath: String = m.subPathOpt match {
-          case Some(subPath) => s"${m.basePath}$subPath"
-          case _ => m.basePath
-        }
         val deps: ISZ[ST] = for (dep <- m.deps) yield
           st"""<orderEntry type="module" module-name="$dep" exported="" />"""
-        val sources: ISZ[ST] = for (src <- m.sources) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$src"))}" isTestSource="false" />"""
-        val resources: ISZ[ST] = for (rsc <- m.resources) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$rsc"))}" type="java-resource" />"""
-        val testSources: ISZ[ST] = for (src <- m.testSources) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$src"))}" isTestSource="true" />"""
-        val testResources: ISZ[ST] = for (rsc <- m.testResources) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(s"$basePath$rsc"))}" type="java-test-resource" />"""
+        val sources: ISZ[ST] = for (src <- ProjectUtil.moduleSources(m)) yield
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, src)}" isTestSource="false" />"""
+        val resources: ISZ[ST] = for (rsc <- ProjectUtil.moduleResources(m)) yield
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, rsc)}" type="java-resource" />"""
+        val testSources: ISZ[ST] = for (src <- ProjectUtil.moduleTestSources(m)) yield
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, src)}" isTestSource="true" />"""
+        val testResources: ISZ[ST] = for (rsc <- ProjectUtil.moduleTestResources(m)) yield
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, rsc)}" type="java-test-resource" />"""
         val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
           st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
         val st =
@@ -474,7 +472,7 @@ object Proyek {
               |<module type="JAVA_MODULE" version="4">
               |  <component name="NewModuleRootManager" inherit-compiler-output="true">
               |    <exclude-output />
-              |    <content url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, Os.path(basePath))}">
+              |    <content url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, ProjectUtil.moduleBasePath(m))}">
               |      ${(sources, "\n")}
               |      ${(resources, "\n")}
               |      ${(testSources, "\n")}
@@ -587,12 +585,6 @@ object Proyek {
       val org = st"${(orgName, ".")}".render
       val module = s"${m.id}${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}"
 
-      var base = m.basePath
-      m.subPathOpt match {
-        case Some(subPath) => base = s"$base$subPath"
-        case _ =>
-      }
-
       val pom: String = {
         var deps = ISZ[ST]()
 
@@ -623,9 +615,8 @@ object Proyek {
       def writeMainJar(): Unit = {
         val mOutMainDir = mOutDir / mainOutDirName
 
-        for (resource <- m.resources) {
-          val resourcePath = Os.path(s"$base$resource")
-          resourcePath.overlayCopy(mOutMainDir, F, symlink, shouldCopy _, F)
+        for (resource <- ProjectUtil.moduleResources(m)) {
+          resource.overlayCopy(mOutMainDir, F, symlink, shouldCopy _, F)
         }
 
         val mainMetaInf = mOutMainDir / metaInf / manifestMf
@@ -648,14 +639,12 @@ object Proyek {
       def writeSourcesJar(): Unit = {
         val mOutSourcesDir = mOutDir / sourcesOutDirName
 
-        for (source <- m.sources) {
-          val sourcePath = Os.path(s"$base$source")
-          sourcePath.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
+        for (source <- ProjectUtil.moduleSources(m)) {
+          source.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
         }
 
-        for (resource <- m.resources) {
-          val resourcePath = Os.path(s"$base$resource")
-          resourcePath.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
+        for (resource <- ProjectUtil.moduleResources(m)) {
+          resource.overlayCopy(mOutSourcesDir, F, symlink, shouldCopy _, F)
         }
 
         val sourcesMetaInf = mOutSourcesDir / metaInf / manifestMf
@@ -709,12 +698,7 @@ object Proyek {
         classpath = classpath :+ mDir.string
       }
 
-      var base = m.basePath
-      m.subPathOpt match {
-        case Some(subPath) => base = s"$base$subPath"
-        case _ =>
-      }
-      classpath = classpath ++ (for (r <- m.resources) yield s"$base$r")
+      classpath = classpath ++ (for (resource <- ProjectUtil.moduleResources(m)) yield resource.string)
     }
 
     for (lib <- dm.libMap.values) {
@@ -765,12 +749,7 @@ object Proyek {
         testClasspath = testClasspath :+ mDir.string
       }
 
-      var base = m.basePath
-      m.subPathOpt match {
-        case Some(subPath) => base = s"$base$subPath"
-        case _ =>
-      }
-      testClasspath = testClasspath ++ (for (r <- m.resources ++ m.testResources) yield s"$base$r")
+      testClasspath = testClasspath ++ (for (r <- ProjectUtil.moduleResources(m) ++ ProjectUtil.moduleTestResources(m)) yield r.string)
     }
 
     testClasspath = testClasspath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
