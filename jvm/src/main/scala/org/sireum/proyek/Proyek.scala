@@ -357,6 +357,7 @@ object Proyek {
 
     def writeLibraries(): Unit = {
       val ideaLib = dotIdea / "libraries"
+      ideaLib.removeAll()
       ideaLib.mkdirAll()
 
       def writeLibrary(lib: DependencyManager.Lib): Unit = {
