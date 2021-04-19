@@ -183,8 +183,8 @@ object Proyek {
     for (m <- project.modules.values) {
       val mDir = projectOutDir / m.id / mainOutDirName
       mDir.overlayCopy(contentDir, F, F, trueF, F)
-      for (r <- m.resources) {
-        Os.path(r).overlayCopy(contentDir, F, F, trueF, F)
+      for (r <- ProjectUtil.moduleResources(m)) {
+        r.overlayCopy(contentDir, F, F, trueF, F)
       }
     }
 
