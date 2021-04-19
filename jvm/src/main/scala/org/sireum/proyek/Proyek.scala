@@ -547,6 +547,7 @@ object Proyek {
     writeLibraries()
     writeModules()
     IVE.writeMisc(dotIdea, outDirName)
+    IVE.writeCodeStyles(dotIdea)
     IVE.writeCompiler(dotIdea)
     IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, dm.sireumJar)
     IVE.writeScalaSettings(dotIdea)
@@ -1039,6 +1040,41 @@ object Proyek {
       writeColors()
 
       (Os.home / s".SireumIVE$devSuffix-sandbox").mkdirAll()
+    }
+
+    def writeCodeStyles(dotIdea: Os.Path): Unit = {
+      val codeStyles = dotIdea / "codeStyles"
+      codeStyles.mkdirAll()
+
+      {
+        val f = codeStyles / "codeStyleConfig.xml"
+        f.writeOver(
+          st"""<component name="ProjectCodeStyleConfiguration">
+              |  <state>
+              |    <option name="USE_PER_PROJECT_SETTINGS" value="true" />
+              |  </state>
+              |</component>
+              |""".render
+        )
+        println(s"Wrote $f")
+      }
+
+      {
+        val f = codeStyles / "Project.xml"
+        f.writeOver(
+          st"""<component name="ProjectCodeStyleConfiguration">
+              |  <code_scheme name="Project" version="173">
+              |    <option name="FORMATTER_TAGS_ENABLED" value="true" />
+              |    <ScalaCodeStyleSettings>
+              |      <option name="MULTILINE_STRING_CLOSING_QUOTES_ON_NEW_LINE" value="true" />
+              |    </ScalaCodeStyleSettings>
+              |  </code_scheme>
+              |</component>
+              |
+              |""".render
+        )
+        println(s"Wrote $f")
+      }
     }
 
     def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
