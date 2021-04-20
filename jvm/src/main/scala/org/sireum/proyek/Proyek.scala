@@ -81,7 +81,7 @@ object Proyek {
       var plugins = ISZ(scalacPlugin)
       if (isJs) {
         plugins = plugins :+
-          dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaJsKey).replaceAllChars('%', ':')}${dm.scalaJsVersion}"))(0).path
+          dm.fetch(ISZ(s"${DependencyManager.scalaJsKey}${dm.scalaJsVersion}"))(0).path
       }
       val scOptions = scalacOptions :+ st"-Xplugin:${(plugins, ",")}".render
 
@@ -761,7 +761,7 @@ object Proyek {
     }
 
     val classpath: ISZ[String] = for (
-      cif <- dm.fetch(ISZ(s"${ops.StringOps(DependencyManager.scalaTestKey).replaceAllChars('%', ':')}${dm.scalaTestVersion}"))
+      cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))
     ) yield cif.path.string
 
     var args = javaOptions ++ ISZ[String](
