@@ -348,6 +348,7 @@ object Proyek {
           outDirName: String,
           jbrVersion: String,
           ideaDir: Os.Path,
+          sireumHome: Os.Path,
           isUltimate: B,
           isDev: B,
           force: B): Z = {
@@ -554,8 +555,8 @@ object Proyek {
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, projectName)
+    IVE.writeWorkspace(dotIdea, sireumHome)
     IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
-
     return 0
   }
 
@@ -893,7 +894,7 @@ object Proyek {
               |        </javadocPath>
               |      </roots>
               |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
+              |        <option name="mySandboxHome" value="$$USER_HOME$$${Os.fileSep}.SireumIVE$devSuffix-sandbox" />
               |      </additional>
               |    </jdk>"""
 
@@ -1108,7 +1109,6 @@ object Proyek {
     def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path, sireumJar: Os.Path): Unit = {
       val f = dotIdea / "scala_compiler.xml"
       val scalacPluginPath = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}"
-      val sireumJarPath = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(sireumJar)}"
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
@@ -1126,15 +1126,6 @@ object Proyek {
             |    <plugins>
             |      <plugin path="$scalacPluginPath" />
             |    </plugins>
-            |    <profile name="Worksheet" modules="">
-            |      <parameters>
-            |        <parameter value="-classpath" />
-            |        <parameter value="$sireumJarPath" />
-            |      </parameters>
-            |      <plugins>
-            |        <plugin path="$scalacPluginPath" />
-            |      </plugins>
-            |    </profile>
             |  </component>
             |</project>
             |""".render
@@ -1157,14 +1148,11 @@ object Proyek {
             |      </map>
             |    </option>
             |    <option name="metaTrimMethodBodies" value="false" />
+            |    <option name="scFileMode" value="Ammonite" />
             |    <option name="scalaMetaMode" value="Disabled" />
             |    <option name="showNotFoundImplicitArguments" value="false" />
             |    <option name="treatDocCommentAsBlockComment" value="true" />
             |    <option name="treatScratchFilesAsWorksheet" value="false" />
-            |  </component>
-            |  <component name="WorksheetDefaultProjectSettings">
-            |    <option name="compilerProfileName" value="Worksheet" />
-            |    <option name="runType" value="Plain" />
             |  </component>
             |</project>""".render
       )
@@ -1218,6 +1206,29 @@ object Proyek {
             |  </configuration>
             |</component>
             |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeWorkspace(dotIdea: Os.Path, sireumHome: Os.Path): Unit = {
+      val f = dotIdea / "workspace.xml"
+      val slangRun = sireumHome / "bin" / (if (Os.isWin) "slang-run.bat" else "slang-run.sh")
+      val slangRunLoc = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(slangRun)}"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="RunManager">
+            |    <configuration default="true" type="ScalaAmmoniteRunConfigurationType" factoryName="Ammonite" singleton="false">
+            |      <setting name="execName" value="$slangRunLoc" />
+            |      <setting name="fileName" value="" />
+            |      <setting name="scriptParameters" value="" />
+            |      <method v="2" />
+            |    </configuration>
+            |    <list>
+            |      <item itemvalue="Application.Slang Script Runner" />
+            |    </list>
+            |  </component>
+            |</project>""".render
       )
       println(s"Wrote $f")
     }
