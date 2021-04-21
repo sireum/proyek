@@ -1151,6 +1151,7 @@ object Proyek {
             |    <option name="scFileMode" value="Ammonite" />
             |    <option name="scalaMetaMode" value="Disabled" />
             |    <option name="showNotFoundImplicitArguments" value="false" />
+            |    <option name="trailingCommasMode" value="Enabled" />
             |    <option name="treatDocCommentAsBlockComment" value="true" />
             |    <option name="treatScratchFilesAsWorksheet" value="false" />
             |  </component>
