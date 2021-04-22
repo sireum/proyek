@@ -232,40 +232,34 @@ object Proyek {
       versions = versions -- ISZ(DependencyManager.libraryKey)
     }
 
-    val versionsChanged: B = if (versionsCache.exists) {
-      val jsonParser = Json.Parser.create(versionsCache.read)
-      val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
-      val r = jsonParser.errorOpt.nonEmpty || m != versions
-      if (r) {
-        println("Dependency version changes detected ...")
-        println()
-      }
-      r
-    } else {
-      T
+    val versionsChanged: B = loadVersions(versionsCache) match {
+      case Some(m) =>
+        val r = m != versions
+        if (r) {
+          println("Dependency version changes detected ...")
+          println()
+        }
+        r
+      case _ => T
     }
-
 
     val projectNoPub = project.stripPubInfo
 
-    val projectChanged: B = if (projectCache.exists) {
-      val pcOpt = ProjectUtil.load(projectCache)
-      val r = pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
-      if (r) {
-        println("Project changes detected ...")
-        println()
-      }
-      r
-    } else {
-      T
+    val projectChanged: B = ProjectUtil.load(projectCache) match {
+      case Some(pc) =>
+        val r = !(projectNoPub <= pc)
+        if (r) {
+          println("Project changes detected ...")
+          println()
+        }
+        r
+      case _ => T
     }
 
     val compileAll = versionsChanged || projectChanged
 
     if (compileAll) {
-      versionsCache.writeOver(
-        Json.Printer.printHashSMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render
-      )
+      storeVersions(versionsCache, versions)
       ProjectUtil.store(projectCache, projectNoPub)
     }
 
@@ -560,6 +554,7 @@ object Proyek {
     IVE.writeScriptRunner(dotIdea, projectName)
     IVE.writeWorkspace(dotIdea, sireumHome)
     IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
 
@@ -1081,20 +1076,6 @@ object Proyek {
       }
     }
 
-    def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
-      val f = dotIdea / "misc.xml"
-      f.writeOver(
-        st"""<?xml version="1.0" encoding="UTF-8"?>
-            |<project version="4">
-            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="Java" project-jdk-type="JavaSDK">
-            |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
-            |  </component>
-            |</project>
-            |""".render
-      )
-      println(s"Wrote $f")
-    }
-
     def writeCompiler(dotIdea: Os.Path): Unit = {
       val f = dotIdea / "compiler.xml"
       f.writeOver(
@@ -1102,6 +1083,52 @@ object Proyek {
             |<project version="4">
             |  <component name="CompilerConfiguration">
             |    <option name="USE_RELEASE_OPTION" value="false" />
+            |  </component>
+            |</project>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeInspectionProfiles(dotIdea: Os.Path): Unit = {
+      val inspectionProfiles = dotIdea / "inspectionProfiles"
+      inspectionProfiles.mkdirAll()
+      val f = inspectionProfiles / "Project_Default.xml"
+      f.writeOver(
+        st"""<component name="InspectionProjectProfileManager">
+            |  <profile version="1.0">
+            |    <option name="myName" value="Project Default" />
+            |    <inspection_tool class="ComparingUnrelatedTypes" enabled="false" level="WARNING" enabled_by_default="false" />
+            |    <inspection_tool class="ConvertibleToMethodValue" enabled="false" level="WARNING" enabled_by_default="false" />
+            |    <inspection_tool class="RemoveRedundantReturn" enabled="false" level="WARNING" enabled_by_default="false" />
+            |  </profile>
+            |</component>
+            |""".render
+      )
+      println(s"Wrote $f")
+    }
+
+    def writeIveInfo(dotIdea: Os.Path, project: Project, versions: HashSMap[String, String]): Unit = {
+      {
+        val f = dotIdea / "project.json"
+        ProjectUtil.store(f, project)
+        println(s"Wrote $f")
+      }
+
+      {
+        val f = dotIdea / "versions.json"
+        storeVersions(f, versions)
+        println(s"Wrote $f")
+      }
+    }
+
+    def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
+      val f = dotIdea / "misc.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="Java" project-jdk-type="JavaSDK">
+            |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
             |  </component>
             |</project>
             |""".render
@@ -1163,18 +1190,19 @@ object Proyek {
       println(s"Wrote $f")
     }
 
-    def writeInspectionProfiles(dotIdea: Os.Path): Unit = {
-      val inspectionProfiles = dotIdea / "inspectionProfiles"
-      inspectionProfiles.mkdirAll()
-      val f = inspectionProfiles / "Project_Default.xml"
+    def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
+      val runConfigurations = dotIdea / "runConfigurations"
+      runConfigurations.mkdirAll()
+
+      val f = runConfigurations / "Slang_Script_Runner.xml"
       f.writeOver(
-        st"""<component name="InspectionProjectProfileManager">
-            |  <profile version="1.0">
-            |    <option name="myName" value="Project Default" />
-            |    <inspection_tool class="ComparingUnrelatedTypes" enabled="false" level="WARNING" enabled_by_default="false" />
-            |    <inspection_tool class="ConvertibleToMethodValue" enabled="false" level="WARNING" enabled_by_default="false" />
-            |    <inspection_tool class="RemoveRedundantReturn" enabled="false" level="WARNING" enabled_by_default="false" />
-            |  </profile>
+        st"""<component name="ProjectRunConfigurationManager">
+            |  <configuration default="false" name="Slang Script Runner" type="Application" factoryName="Application" singleton="false">
+            |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
+            |    <module name="$name" />
+            |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
+            |    <method v="2" />
+            |  </configuration>
             |</component>
             |""".render
       )
@@ -1190,25 +1218,6 @@ object Proyek {
             |    <option name="INSTRUMENT_CLASSES" value="true" />
             |  </component>
             |</project>
-            |""".render
-      )
-      println(s"Wrote $f")
-    }
-
-    def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
-      val runConfigurations = dotIdea / "runConfigurations"
-      runConfigurations.mkdirAll()
-
-      val f = runConfigurations / "Slang_Script_Runner.xml"
-      f.writeOver(
-        st"""<component name="ProjectRunConfigurationManager">
-            |  <configuration default="false" name="Slang Script Runner" type="Application" factoryName="Application" singleton="false">
-            |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
-            |    <module name="$name" />
-            |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
-            |    <method v="2" />
-            |  </configuration>
-            |</component>
             |""".render
       )
       println(s"Wrote $f")
@@ -1368,5 +1377,21 @@ object Proyek {
     } else {
       return (F, st"${(sb, "")}".render)
     }
+  }
+
+  def loadVersions(path: Os.Path): Option[HashSMap[String, String]] = {
+    if (!path.isFile) {
+      return None()
+    }
+    val jsonParser = Json.Parser.create(path.read)
+    val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
+    return if (jsonParser.errorOpt.isEmpty) Some(m) else None()
+  }
+
+  def storeVersions(path: Os.Path, versions: HashSMap[String, String]): Unit = {
+    path.up.mkdirAll()
+    path.writeOver(
+      Json.Printer.printHashSMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render
+    )
   }
 }
