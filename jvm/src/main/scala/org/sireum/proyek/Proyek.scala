@@ -235,28 +235,29 @@ object Proyek {
     val versionsChanged: B = if (versionsCache.exists) {
       val jsonParser = Json.Parser.create(versionsCache.read)
       val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
-      jsonParser.errorOpt.nonEmpty || m != versions
+      val r = jsonParser.errorOpt.nonEmpty || m != versions
+      if (r) {
+        println("Dependency version changes detected ...")
+        println()
+      }
+      r
     } else {
       T
     }
 
-    if (versionsChanged) {
-      println("Dependency version changes detected ...")
-      println()
-    }
 
     val projectNoPub = project.stripPubInfo
 
     val projectChanged: B = if (projectCache.exists) {
       val pcOpt = ProjectUtil.load(projectCache)
-      pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
+      val r = pcOpt.isEmpty || !(projectNoPub <= pcOpt.get)
+      if (r) {
+        println("Project changes detected ...")
+        println()
+      }
+      r
     } else {
       T
-    }
-
-    if (projectChanged) {
-      println("Project changes detected ...")
-      println()
     }
 
     val compileAll = versionsChanged || projectChanged
@@ -268,7 +269,9 @@ object Proyek {
       ProjectUtil.store(projectCache, projectNoPub)
     }
 
-    if (fresh) {
+    if (fresh || compileAll) {
+      println("Fresh compilation ...")
+      println()
       projectOutDir.removeAll()
     }
     projectOutDir.mkdirAll()
