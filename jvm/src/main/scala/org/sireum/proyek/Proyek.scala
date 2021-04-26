@@ -345,7 +345,6 @@ object Proyek {
           outDirName: String,
           jbrVersion: String,
           ideaDir: Os.Path,
-          sireumHome: Os.Path,
           isUltimate: B,
           isDev: B,
           force: B): Z = {
@@ -552,7 +551,7 @@ object Proyek {
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, projectName)
-    IVE.writeWorkspace(dotIdea, sireumHome)
+    IVE.writeWorkspace(dotIdea, dm.sireumHome)
     IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
