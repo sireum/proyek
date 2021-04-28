@@ -91,7 +91,7 @@ object cli {
     )
   )
 
-  val javacFreshParScalacSha3Opts: ISZ[Opt] = ISZ(
+  val commonCompileOpts: ISZ[Opt] = ISZ(
     Opt(name = "javac", longKey = "javac", shortKey = None(),
       tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options")),
       description = "Javac options"
@@ -103,6 +103,10 @@ object cli {
     Opt(name = "par", longKey = "par", shortKey = Some('p'),
       tpe = Type.Flag(F),
       description = "Enable parallelization"
+    ),
+    Opt(name = "recompile", longKey = "recompile", shortKey = None(),
+      tpe = Type.Str(Some(','), None()),
+      description = "Module IDs to force recompilation on"
     ),
     Opt(name = "scalac", longKey = "scalac", shortKey = None(),
       tpe = Type.Str(Some(','), Some("-target:jvm-1.8, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Xfatal-warnings, -language:postfixOps")),
@@ -116,7 +120,7 @@ object cli {
 
   val compileOptGroup: OptGroup = OptGroup(
     name = "Compilation",
-    opts = javacFreshParScalacSha3Opts :+
+    opts = commonCompileOpts :+
       Opt(name = "skipCompile", longKey = "skip-compile", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Skip compilation"
@@ -154,7 +158,7 @@ object cli {
     header = "Sireum Proyek Compiler",
     usage = "<options>* <dir>",
     usageDescOpt = None(),
-    opts = javacFreshParScalacSha3Opts :+
+    opts = commonCompileOpts :+
       Opt(name = "js", longKey = "js", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Compile using Scala.js"

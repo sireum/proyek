@@ -218,7 +218,8 @@ object Proyek {
               fresh: B,
               par: B,
               sha3: B,
-              ignoreRuntime: B): Z = {
+              ignoreRuntime: B,
+              recompileModuleIds: ISZ[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName, isJs)
 
@@ -273,6 +274,7 @@ object Proyek {
     val target: Target.Type = if (isJs) Target.Js else Target.Jvm
     var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
     var compiledModuleIds = HashSet.empty[String]
+    val recompileIds = HashSet ++ recompileModuleIds
     while (modules.nonEmpty) {
       var nexts = ISZ[(Module, B)]()
       var newModules = HashSMap.empty[String, B]
@@ -290,11 +292,11 @@ object Proyek {
       }
       if (nexts.nonEmpty) {
         val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
-        println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
+        println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(for (nextId <- nextIds) yield if (!fresh && !compileAll && recompileIds.contains(nextId)) s"${nextId}*" else nextId, ", ")} ...".render)
         val compileModule = (pair: (Module, B)) => CompileModuleProcessor(
           root = path,
           module = pair._1,
-          force = pair._2,
+          force = pair._2 || recompileIds.contains(pair._1.id),
           par = par,
           sha3 = sha3,
           followSymLink = followSymLink,
