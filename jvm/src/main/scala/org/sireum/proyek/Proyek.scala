@@ -808,6 +808,25 @@ object Proyek {
 
   object IVE {
 
+    val scalaSettings: ST =
+      st"""<component name="ScalaProjectSettings">
+          |  <option name="autoRunDelay" value="3000" />
+          |  <option name="dontCacheCompoundTypes" value="true" />
+          |  <option name="inProcessMode" value="false" />
+          |  <option name="intInjectionMapping">
+          |    <map>
+          |      <entry key="xml" value="XML" />
+          |    </map>
+          |  </option>
+          |  <option name="metaTrimMethodBodies" value="false" />
+          |  <option name="scFileMode" value="Ammonite" />
+          |  <option name="scalaMetaMode" value="Disabled" />
+          |  <option name="showNotFoundImplicitArguments" value="false" />
+          |  <option name="trailingCommasMode" value="Enabled" />
+          |  <option name="treatDocCommentAsBlockComment" value="true" />
+          |  <option name="treatScratchFilesAsWorksheet" value="false" />
+          |</component>"""
+
     def writeApplicationConfigs(force: B,
                                 ideaDir: Os.Path,
                                 isUltimate: B,
@@ -1169,25 +1188,9 @@ object Proyek {
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
-            |  <component name="ScalaProjectSettings">
-            |    <option name="autoRunDelay" value="3000" />
-            |    <option name="dontCacheCompoundTypes" value="true" />
-            |    <option name="inProcessMode" value="false" />
-            |    <option name="intInjectionMapping">
-            |      <map>
-            |        <entry key="xml" value="XML" />
-            |      </map>
-            |    </option>
-            |    <option name="metaTrimMethodBodies" value="false" />
-            |    <option name="scFileMode" value="Ammonite" />
-            |    <option name="scalaMetaMode" value="Disabled" />
-            |    <option name="showNotFoundImplicitArguments" value="false" />
-            |    <option name="trailingCommasMode" value="Enabled" />
-            |    <option name="treatDocCommentAsBlockComment" value="true" />
-            |    <option name="treatScratchFilesAsWorksheet" value="false" />
-            |  </component>
-            |</project>""".render
-      )
+            |  $scalaSettings
+            |</project>"""
+          .render)
       println(s"Wrote $f")
     }
 
@@ -1242,6 +1245,7 @@ object Proyek {
             |      <item itemvalue="Application.Slang Script Runner" />
             |    </list>
             |  </component>
+            |  $scalaSettings
             |</project>""".render
       )
       println(s"Wrote $f")
