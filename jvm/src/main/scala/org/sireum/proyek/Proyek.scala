@@ -457,24 +457,27 @@ object Proyek {
     }
 
     def writeModules(): Unit = {
-      val dotIdeaModules = path / ".idea_modules"
-      dotIdeaModules.mkdirAll()
+      (path / ".idea_modules").removeAll()
+
+      for (p <- dotIdea.list if p.ext === "iml") {
+        p.removeAll()
+      }
 
       var moduleEntries = ISZ[ST]()
 
       def writeModule(m: Module): Unit = {
         moduleEntries = moduleEntries :+
-          st"""<module fileurl="file://$$PROJECT_DIR$$/.idea_modules/${m.id}.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea_modules${Os.fileSep}${m.id}.iml" />"""
+          st"""<module fileurl="file://$$PROJECT_DIR$$/.idea/${m.id}.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea${Os.fileSep}${m.id}.iml" />"""
         val deps: ISZ[ST] = for (dep <- m.deps) yield
           st"""<orderEntry type="module" module-name="$dep" exported="" />"""
         val sources: ISZ[ST] = for (src <- ProjectUtil.moduleSources(m)) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, src)}" isTestSource="false" />"""
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(path, src)}" isTestSource="false" />"""
         val resources: ISZ[ST] = for (rsc <- ProjectUtil.moduleResources(m)) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, rsc)}" type="java-resource" />"""
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(path, rsc)}" type="java-resource" />"""
         val testSources: ISZ[ST] = for (src <- ProjectUtil.moduleTestSources(m)) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, src)}" isTestSource="true" />"""
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(path, src)}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- ProjectUtil.moduleTestResources(m)) yield
-          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, rsc)}" type="java-test-resource" />"""
+          st"""<sourceFolder url="file://$$MODULE_DIR$$/${relUri(path, rsc)}" type="java-test-resource" />"""
         val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
           st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
         val st =
@@ -482,7 +485,7 @@ object Proyek {
               |<module type="JAVA_MODULE" version="4">
               |  <component name="NewModuleRootManager" inherit-compiler-output="true">
               |    <exclude-output />
-              |    <content url="file://$$MODULE_DIR$$/${relUri(dotIdeaModules, ProjectUtil.moduleBasePath(m))}">
+              |    <content url="file://$$MODULE_DIR$$/${relUri(path, ProjectUtil.moduleBasePath(m))}">
               |      ${(sources, "\n")}
               |      ${(resources, "\n")}
               |      ${(testSources, "\n")}
@@ -496,7 +499,7 @@ object Proyek {
               |  </component>
               |</module>
               |"""
-        val f = dotIdeaModules / s"${m.id}.iml"
+        val f = dotIdea / s"${m.id}.iml"
         f.writeOver(st.render)
         println(s"Wrote $f")
       }
@@ -516,13 +519,13 @@ object Proyek {
       }
 
       {
-        val f = dotIdeaModules / s"$projectName.iml"
+        val f = dotIdea / s"$projectName.iml"
         f.writeOver(
           st"""<?xml version="1.0" encoding="UTF-8"?>
               |<module type="JAVA_MODULE" version="4">
               |  <component name="NewModuleRootManager" inherit-compiler-output="true">
               |    <exclude-output />
-              |    <content url="file://$$MODULE_DIR$$/.." />
+              |    <content url="file://$$MODULE_DIR$$" />
               |    <orderEntry type="inheritedJdk" />
               |    <orderEntry type="library" name="Scala" level="project" />
               |    <orderEntry type="library" name="Sireum" level="project" />
@@ -535,7 +538,7 @@ object Proyek {
       }
 
       moduleEntries = moduleEntries :+
-        st"""<module fileurl="file://$$PROJECT_DIR$$/.idea_modules/$projectName.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea_modules${Os.fileSep}$projectName.iml" />""";
+        st"""<module fileurl="file://$$PROJECT_DIR$$/.idea/$projectName.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea${Os.fileSep}$projectName.iml" />""";
       {
         val f = dotIdea / "modules.xml"
         f.writeOver(
