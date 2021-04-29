@@ -233,38 +233,46 @@ object Proyek {
       versions = versions -- ISZ(DependencyManager.libraryKey)
     }
 
-    val versionsChanged: B = loadVersions(versionsCache) match {
-      case Some(m) =>
-        val r = m != versions
-        if (r) {
-          println("Dependency version changes detected ...")
-          println()
-        }
-        r
-      case _ => T
+    val versionsChanged: B = if (fresh) {
+      T
+    } else {
+      loadVersions(versionsCache) match {
+        case Some(m) =>
+          val r = m != versions
+          if (r) {
+            println("Dependency version changes detected ...")
+            println()
+          }
+          r
+        case _ => T
+      }
     }
 
     val projectNoPub = project.stripPubInfo
 
-    val projectChanged: B = ProjectUtil.load(projectCache) match {
-      case Some(pc) =>
-        val r = !(projectNoPub <= pc)
-        if (r) {
-          println("Project changes detected ...")
-          println()
-        }
-        r
-      case _ => T
+    val projectChanged: B = if (fresh) {
+      T
+    } else {
+      ProjectUtil.load(projectCache) match {
+        case Some(pc) =>
+          val r = !(projectNoPub <= pc)
+          if (r) {
+            println("Project changes detected ...")
+            println()
+          }
+          r
+        case _ => T
+      }
     }
 
-    val compileAll = versionsChanged || projectChanged
+    val compileAll = fresh || versionsChanged || projectChanged
 
     if (compileAll) {
       storeVersions(versionsCache, versions)
       ProjectUtil.store(projectCache, projectNoPub)
     }
 
-    if (fresh || compileAll) {
+    if (compileAll) {
       println("Fresh compilation ...")
       println()
       projectOutDir.removeAll()
@@ -291,8 +299,10 @@ object Proyek {
         }
       }
       if (nexts.nonEmpty) {
-        val nextIds: ISZ[String] = for (next <- nexts) yield next._1.id
-        println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(for (nextId <- nextIds) yield if (!fresh && !compileAll && recompileIds.contains(nextId)) s"${nextId}*" else nextId, ", ")} ...".render)
+        val nextIds: ISZ[String] = for (next <- nexts) yield
+          if (!compileAll && !next._2 && recompileIds.contains(next._1.id)) s"${next._1.id}*"
+          else next._1.id
+        println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
         val compileModule = (pair: (Module, B)) => CompileModuleProcessor(
           root = path,
           module = pair._1,
