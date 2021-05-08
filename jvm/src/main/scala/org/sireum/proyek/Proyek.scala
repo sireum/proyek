@@ -1379,17 +1379,39 @@ object Proyek {
     var ok = T
     var sb = ISZ[ST]()
 
-    val javaSources: ISZ[String] = for (f <- sourceFiles if f.ext === "java") yield f.string
-    val numOfScalaFiles: Z = sourceFiles.size - javaSources.size
-    val numOfJavaFiles: Z = javaSources.size
+    var javaSources = ISZ[String]()
+    var numOfSlangFiles: Z = 0
+    var numOfScalaFiles: Z = 0
+    for (f <- sourceFiles) {
+      f.ext match {
+        case string"scala" =>
+          var cs = ISZ[C]()
+          for (c <- f.readCStream.takeWhile((c: C) => c =!= '\n')) {
+            if (!c.isWhitespace) {
+              cs = cs :+ c
+            }
+          }
+          if (ops.StringOps(conversions.String.fromCis(cs)).contains("#Sireum")) {
+            numOfSlangFiles = numOfSlangFiles + 1
+          } else {
+            numOfScalaFiles = numOfScalaFiles + 1
+          }
+        case _ => javaSources = javaSources :+ f.string
+      }
+    }
+    val numOfJavaFiles = javaSources.size
 
-    (numOfScalaFiles, numOfJavaFiles) match {
-      case (z"0", _) => sb = sb :+ st"* Compiled $numOfJavaFiles Java $mid $category source file${if (numOfJavaFiles > 1) "s" else ""}\n"
-      case (_, z"0") => sb = sb :+ st"* Compiled $numOfScalaFiles Scala $mid $category source file${if (numOfScalaFiles > 1) "s" else ""}\n"
-      case (_, _) => sb = sb :+ st"* Compiled $numOfScalaFiles Scala and $numOfJavaFiles Java $mid $category source files\n"
+    (numOfSlangFiles, numOfScalaFiles, numOfJavaFiles) match {
+      case (_, z"0", z"0") => sb = sb :+ st"* Compiled $numOfSlangFiles Slang $mid $category source file${if (numOfSlangFiles > 1) "s" else ""}\n"
+      case (z"0", _, z"0") => sb = sb :+ st"* Compiled $numOfScalaFiles Scala $mid $category source file${if (numOfScalaFiles > 1) "s" else ""}\n"
+      case (z"0", z"0", _) => sb = sb :+ st"* Compiled $numOfJavaFiles Java $mid $category source file${if (numOfJavaFiles > 1) "s" else ""}\n"
+      case (_, _, z"0") => sb = sb :+ st"* Compiled $numOfSlangFiles Slang and $numOfScalaFiles Scala $mid $category source files\n"
+      case (_, z"0", _) => sb = sb :+ st"* Compiled $numOfSlangFiles Slang and $numOfJavaFiles Java $mid $category source files\n"
+      case (z"0", _, _) => sb = sb :+ st"* Compiled $numOfScalaFiles Scala and $numOfJavaFiles Java $mid $category source files\n"
+      case (_, _, _) => sb = sb :+ st"* Compiled $numOfSlangFiles Slang, $numOfScalaFiles Scala, and $numOfJavaFiles Java $mid $category source files\n"
     }
 
-    if (numOfScalaFiles > 0) {
+    if (numOfSlangFiles > 0 || numOfScalaFiles > 0) {
       val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
       scalaArgs = scalaArgs ++ scalacOptions
       scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield f.string)
