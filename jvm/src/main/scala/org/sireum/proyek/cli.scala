@@ -142,6 +142,10 @@ object cli {
       Opt(name = "mainClass ", longKey = "main", shortKey = Some('m'),
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"
+      ),
+      Opt(name = "isNative ", longKey = "native", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Generates native image"
       )
     ),
     groups = ISZ(

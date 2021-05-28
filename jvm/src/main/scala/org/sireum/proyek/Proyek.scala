@@ -154,7 +154,8 @@ object Proyek {
                projectName: String,
                jarName: String,
                dm: DependencyManager,
-               mainClassNameOpt: Option[String]): Z = {
+               mainClassNameOpt: Option[String],
+               isNative: B): Z = {
 
     val trueF = (_: Os.Path) => T
 
@@ -202,6 +203,29 @@ object Proyek {
     Asm.rewriteReleaseFence(jar)
 
     println(s"Wrote $jar")
+
+    if (isNative) {
+      val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
+        case Os.Kind.Mac => ("mac", ISZ("--no-server"))
+        case Os.Kind.Linux => ("linux", ISZ("--static", "--no-server"))
+        case Os.Kind.LinuxArm => ("linux/arm", ISZ("--static", "--no-server"))
+        case Os.Kind.Win => ("win", ISZ("--static", "-H:NativeLinkerOption=Winhttp.lib"))
+        case _ => halt("Unsupported operating system")
+      }
+      val homeBin = dm.sireumHome / "bin"
+      (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
+
+      println()
+      println("Building native ...")
+      val platDir = homeBin / platformKind
+      val dir = jar.up.canon
+      val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
+      val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String]("--initialize-at-build-time", "--no-fallback",
+        "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
+        "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https",
+        "-jar", jar.string, (dir / jarName).string)).console.run()
+      return r.exitCode
+    }
 
     return 0
   }
