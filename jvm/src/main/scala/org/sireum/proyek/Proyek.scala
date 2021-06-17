@@ -33,9 +33,9 @@ import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, 
 object Proyek {
 
   @enum object CompileStatus {
-    'Compiled
-    'Skipped
-    'Error
+    "Compiled"
+    "Skipped"
+    "Error"
   }
 
   @datatype class CompileModuleProcessor(val root: Os.Path,
