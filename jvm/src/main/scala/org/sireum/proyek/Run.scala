@@ -27,44 +27,52 @@
 package org.sireum.proyek
 
 import org.sireum._
-import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, ProjectUtil, Target}
+import org.sireum.project._
+import org.sireum.proyek.Proyek._
 
+object Run {
 
-object Proyek {
+  def run(path: Os.Path,
+          outDirName: String,
+          project: Project,
+          projectName: String,
+          dm: DependencyManager,
+          javaOptions: ISZ[String],
+          dir: Os.Path,
+          className: String,
+          args: ISZ[String]): Z = {
 
-  val metaInf: String = "META-INF"
-  val manifestMf: String = "MANIFEST.MF"
+    val proyekDir = getProyekDir(path, outDirName, projectName, F)
+    val projectOutDir = proyekDir / "modules"
 
-  val mainOutDirName: String = "classes"
-  val testOutDirName: String = "test-classes"
-  val sourcesOutDirName: String = "sources"
+    var classpath = ISZ[String]()
 
-  @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String, isJs: B): Os.Path =
-    path / outDirName / s"$projectName${if (isJs) "-js" else ""}"
+    for (m <- project.modules.values) {
+      val mDir = projectOutDir / m.id / mainOutDirName
+      if (mDir.exists) {
+        classpath = classpath :+ mDir.string
+      }
 
-  @pure def normalizePath(path: String): String = {
-    if (Os.isWin) {
-      return path
-    } else {
-      return ops.StringOps(path).replaceAllChars('\\', '/')
+      classpath = classpath ++ (for (resource <- ProjectUtil.moduleResources(m)) yield resource.string)
     }
-  }
 
-  @strictpure def relUri(from: Os.Path, to: Os.Path): String = normalizePath(from.relativize(to).string)
-
-  def loadVersions(path: Os.Path): Option[HashSMap[String, String]] = {
-    if (!path.isFile) {
-      return None()
+    for (lib <- dm.libMap.values) {
+      classpath = classpath :+ lib.main
     }
-    val jsonParser = Json.Parser.create(path.read)
-    val m = jsonParser.parseHashSMap(jsonParser.parseString _, jsonParser.parseString _)
-    return if (jsonParser.errorOpt.isEmpty) Some(m) else None()
+
+    classpath = classpath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
+
+    val javaArgs = javaOptions ++
+      ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
+      args
+    val argFile = proyekDir / "java-run-args"
+    argFile.writeOver(
+      st"${(javaArgs, "\n")}".render)
+
+    val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
+    proc"$javaExe @$argFile".at(dir).console.runCheck()
+
+    return 0
   }
 
-  def storeVersions(path: Os.Path, versions: HashSMap[String, String]): Unit = {
-    path.up.mkdirAll()
-    path.writeOver(
-      Json.Printer.printHashSMap(F, versions, Json.Printer.printString _, Json.Printer.printString _).render
-    )
-  }
 }
