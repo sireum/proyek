@@ -40,7 +40,7 @@ trait Module extends JvmPublishOnly {
   )
 
   final override def crossDeps =
-    if (isSourceDep) Seq(libraryObject)
+    if (isSourceDep) Seq(logikaObject)
     else Seq()
 
   final override def ivyDeps = {
@@ -64,7 +64,7 @@ trait Module extends JvmPublishOnly {
     ivy"org.sireum::scalac-plugin:$scalacPluginVersion"
   )
 
-  def libraryObject: CrossJvmJsPublish
+  def logikaObject: CrossJvmJsPublish
 
   object tests extends Tests
 }
