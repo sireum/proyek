@@ -139,13 +139,17 @@ object cli {
         tpe = Type.Str(None(), None()),
         description = "The assembled jar filename (defaults to the project name)"
       ),
-      Opt(name = "mainClass ", longKey = "main", shortKey = Some('m'),
+      Opt(name = "mainClass", longKey = "main", shortKey = Some('m'),
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"
       ),
-      Opt(name = "isNative ", longKey = "native", shortKey = None(),
+      Opt(name = "isNative", longKey = "native", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Generates native image"
+      ),
+      Opt(name = "uber", longKey = "uber", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Generates uber jar"
       )
     ),
     groups = ISZ(
@@ -195,6 +199,22 @@ object cli {
       ivyOptGroup
     )
   )
+
+
+  val logikaProyekTool: Tool = Tool(
+    name = "logika",
+    command = "logika",
+    description = "Sireum Logika for Proyek",
+    header = "Sireum Logika for Proyek",
+    usage = "<options>* <file>*",
+    usageDescOpt = None(),
+    opts = ISZ(
+    ),
+    groups = ISZ(
+      projectOptGroup,
+    ) ++ org.sireum.logika.cli.logikaVerifier.groups
+  )
+
 
   val publishTool: Tool = Tool(
     name = "publish",
@@ -287,7 +307,7 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, publishTool, runTool, testTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, testTool)
   )
 
 }

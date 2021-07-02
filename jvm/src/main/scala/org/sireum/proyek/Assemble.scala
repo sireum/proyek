@@ -32,6 +32,15 @@ import org.sireum.proyek.Proyek._
 
 object Assemble {
 
+  val uberHeader: ISZ[String] = ISZ(
+    """@ 2>/dev/null # 2>nul & echo off & goto BOF   #""",
+    """exec java -jar "$0" "$@"                      #""",
+    """:BOF""",
+    """java -jar "%0" %*""",
+    """exit /B %errorlevel%""",
+    ""
+  )
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -39,7 +48,8 @@ object Assemble {
           jarName: String,
           dm: DependencyManager,
           mainClassNameOpt: Option[String],
-          isNative: B): Z = {
+          isNative: B,
+          isUber: B): Z = {
 
     val trueF = (_: Os.Path) => T
 
@@ -48,7 +58,8 @@ object Assemble {
 
     val assembleDir = proyekDir / "assemble"
     val contentDir = assembleDir / "content"
-    val jar = assembleDir / s"$jarName.jar"
+    val jar: Os.Path = if (isUber) assembleDir / s"$jarName.bat" else assembleDir / s"$jarName.jar"
+
     jar.removeAll()
 
     println(s"Assembling ...")
@@ -60,6 +71,8 @@ object Assemble {
     metaDir.mkdirAll()
 
     (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
+
+    Asm.rewriteReleaseFence(contentDir)
 
     for (lib <- dm.libMap.values) {
       Os.path(lib.main).unzipTo(contentDir)
@@ -82,9 +95,11 @@ object Assemble {
           |""".render
     )
 
+    if (isUber) {
+      jar.writeOver(st"${(uberHeader, "\r\n")}".render)
+      jar.chmod("+x")
+    }
     contentDir.zipTo(jar)
-
-    Asm.rewriteReleaseFence(jar)
 
     println(s"Wrote $jar")
 
