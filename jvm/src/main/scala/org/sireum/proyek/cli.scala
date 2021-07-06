@@ -232,7 +232,7 @@ object cli {
       Opt(
         name = "target", longKey = "target", shortKey = None(),
         tpe = Type.Choice(name = "target", sep = Some(','), elements = ISZ("all", "jvm", "js")),
-        description = """Local m2 repository (defaults to the user home's .m2 directory)"""
+        description = """Publication target"""
       ),
       Opt(
         name = "version", longKey = "version", shortKey = None(),
