@@ -230,6 +230,11 @@ object cli {
         description = """Local m2 repository (defaults to the user home's .m2 directory)"""
       ),
       Opt(
+        name = "target", longKey = "target", shortKey = None(),
+        tpe = Type.Choice(name = "target", sep = Some(','), elements = ISZ("all", "jvm", "js")),
+        description = """Local m2 repository (defaults to the user home's .m2 directory)"""
+      ),
+      Opt(
         name = "version", longKey = "version", shortKey = None(),
         tpe = Type.Str(None(), None()),
         description = """Publication version (defaults to using git commit date, time, and abbreviated hash)"""
