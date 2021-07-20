@@ -105,9 +105,9 @@ object Assemble {
 
     if (isNative) {
       val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
-        case Os.Kind.Mac => ("mac", ISZ("--no-server"))
-        case Os.Kind.Linux => ("linux", ISZ("--static", "--no-server"))
-        case Os.Kind.LinuxArm => ("linux/arm", ISZ("--static", "--no-server"))
+        case Os.Kind.Mac => ("mac", ISZ())
+        case Os.Kind.Linux => ("linux", ISZ("--static"))
+        case Os.Kind.LinuxArm => ("linux/arm", ISZ("--static"))
         case Os.Kind.Win => ("win", ISZ("--static", "-H:NativeLinkerOption=Winhttp.lib"))
         case _ => halt("Unsupported operating system")
       }
