@@ -60,7 +60,8 @@ object Compile {
       return r
     }
 
-    override def process(shouldProcess: B,
+    override def process(o: (CompileStatus.Type, String),
+                         shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path]): ((CompileStatus.Type, String), B) = {
@@ -250,7 +251,7 @@ object Compile {
           scalacOptions = scalacOptions,
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
-        ).run(dm)
+        ).run((CompileStatus.Compiled, ""), dm)
         val r: ISZ[(CompileStatus.Type, String)] =
           if (par) ops.ISZOps(nexts).mParMap(compileModule)
           else for (next <- nexts) yield compileModule(next)
