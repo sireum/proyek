@@ -44,6 +44,7 @@ object Logika {
   @datatype class LogikaModuleProcessor(val root: Os.Path,
                                         val module: Module,
                                         val par: B,
+                                        val strictAliasing: B,
                                         val followSymLink: B,
                                         val outDir: Os.Path) extends ModuleProcessor[VerificationInfo] {
 
@@ -112,18 +113,32 @@ object Logika {
           val results = ops.ISZOps(
             if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
             else inputs.map(FrontEnd.parseGloballyResolve _))
-          val (nm, tm) = Resolver.addBuiltIns(HashMap.empty, HashMap.empty)
+          var nm: Resolver.NameMap = HashMap.empty
+          var tm: Resolver.TypeMap = HashMap.empty
+          for (mid <- dm.project.poset.parentsOf(module.id).elements) {
+            val mth = info.map.get(mid).get
+            nm = nm ++ mth.nameMap.entries
+            tm = tm ++ mth.typeMap.entries
+          }
           val q = results.
             foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
-          (q._3, q._4,
+          nm = q._3
+          tm = q._4
+          if (tm.get(AST.Typed.isName).isEmpty) {
+            val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
+            nm = nm ++ mth.nameMap.entries
+            tm = tm ++ mth.typeMap.entries
+          }
+          (nm, tm,
             for (program <- q._2 if checkUriSet.contains(program.fileUriOpt.get)) yield program,
             info(messages = info.messages ++ q._1), T)
       }
       val rep = Reporter.create
-      if (changed) {
+      rep.reports(info2.messages)
+      if (!rep.hasError && changed) {
         var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), rep)
         if (!rep.hasError) {
-          th = TypeOutliner.checkOutline(T, T, th, rep)
+          th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
         }
         if (!rep.hasError) {
           var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
@@ -141,11 +156,11 @@ object Logika {
                 case _ =>
               }
             }
-            th = TypeChecker.checkComponents(T, T, th, nm, tm, rep)
+            th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
           }
         }
-        val info3 = info2(messages = info2.messages ++ rep.messages)
-        if (ops.ISZOps(info3.messages).exists((m: Message) => m.isError || m.isInternalError)) {
+        val info3 = info2(messages = rep.messages)
+        if (rep.hasError) {
           return (info3(stop = T), changed)
         }
         val newFiles = info2.files -- (checkUriSet -- fileUriSet.elements).elements
