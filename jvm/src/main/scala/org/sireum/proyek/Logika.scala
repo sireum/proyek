@@ -35,10 +35,11 @@ import org.sireum.project._
 
 object Logika {
 
-  @datatype class VerificationInfo(val map: HashMap[String, TypeHierarchy],
-                                   val files: HashMap[String, String],
+  @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
+                                   val files: HashSMap[String, String],
                                    val messages: ISZ[Message],
                                    val lineOpt: Option[Z],
+                                   val all: B,
                                    val stop: B)
 
   @datatype class LogikaModuleProcessor(val root: Os.Path,
@@ -71,24 +72,26 @@ object Logika {
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path]): (VerificationInfo, B) = {
       val fileUriSet = HashSSet.empty[String] ++ (for (p <- sourceFiles ++ testSourceFiles) yield p.toUri)
-      val checkUriSet = HashSSet.empty[String] ++ (for (p <- info.files.keys) yield Os.path(p).toUri)
-      val thOpt = info.map.get(module.id)
+      val checkUriSet: HashSSet[String] =
+        if (info.all) fileUriSet
+        else HashSSet.empty[String] ++ (for (p <- info.files.keys) yield Os.path(p).toUri)
+      val thOpt = info.thMap.get(module.id)
       val (nameMap, typeMap, programs, info2, changed): (Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) = thOpt match {
-        case Some(th) if !shouldProcess =>
+        case Some(th) if info.all || !shouldProcess =>
           var nm = th.nameMap
           var tm = th.typeMap
-          val checkFiles = info.files -- fileUriSet.elements
+          val checkFiles = HashSMap ++ (for (e <- info.files.entries if fileUriSet.contains(e._1)) yield e)
           if (checkFiles.nonEmpty) {
             val inputs = ops.ISZOps(for (pair <- checkFiles.entries) yield FrontEnd.Input(pair._2, Some(Os.path(pair._1).toUri), 0))
-            for (info <- nm.values) {
+            for (info <- nm.values if info.posOpt.nonEmpty) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if fileUriSet.contains(uri) && checkUriSet.contains(uri) => nm = nm - ((info.name, info))
+                case Some(uri) if checkFiles.contains(uri) => nm = nm - ((info.name, info))
                 case _ =>
               }
             }
-            for (info <- tm.values) {
+            for (info <- tm.values if info.posOpt.nonEmpty) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if fileUriSet.contains(uri) && checkUriSet.contains(uri) => tm = tm - ((info.name, info))
+                case Some(uri) if checkFiles.contains(uri) => tm = tm - ((info.name, info))
                 case _ =>
               }
             }
@@ -116,7 +119,7 @@ object Logika {
           var nm: Resolver.NameMap = HashMap.empty
           var tm: Resolver.TypeMap = HashMap.empty
           for (mid <- dm.project.poset.parentsOf(module.id).elements) {
-            val mth = info.map.get(mid).get
+            val mth = info.thMap.get(mid).get
             nm = nm ++ mth.nameMap.entries
             tm = tm ++ mth.typeMap.entries
           }
@@ -130,7 +133,7 @@ object Logika {
             tm = tm ++ mth.typeMap.entries
           }
           (nm, tm,
-            for (program <- q._2 if checkUriSet.contains(program.fileUriOpt.get)) yield program,
+            for (program <- q._2 if info.all || checkUriSet.contains(program.fileUriOpt.get)) yield program,
             info(messages = info.messages ++ q._1), T)
       }
       val rep = Reporter.create
@@ -165,7 +168,7 @@ object Logika {
         }
         val newFiles = info2.files -- (checkUriSet -- fileUriSet.elements).elements
         val info4 = info3(
-          map = info3.map + module.id ~> th,
+          thMap = info3.thMap + module.id ~> th,
           files = newFiles,
           stop = info3.files.nonEmpty ->: newFiles.isEmpty
         )
