@@ -30,17 +30,25 @@ import org.sireum.lang.FrontEnd
 import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.tipe.{TypeChecker, TypeHierarchy, TypeOutliner}
-import org.sireum.message.{Message, Reporter}
+import org.sireum.logika.plugin.Plugin
+import org.sireum.logika.{Config, Logika, Smt2Impl}
+import org.sireum.message.Message
 import org.sireum.project._
 
-object Logika {
+object LogikaVerifier {
 
   @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
                                    val files: HashSMap[String, String],
                                    val messages: ISZ[Message],
                                    val lineOpt: Option[Z],
                                    val all: B,
-                                   val stop: B)
+                                   val stop: B,
+                                   val verify: B,
+                                   val sanityCheck: B,
+                                   val config: Config,
+                                   val plugins: ISZ[Plugin],
+                                   val skipMethods: ISZ[String],
+                                   val skipTypes: ISZ[String])
 
   @datatype class LogikaModuleProcessor(val root: Os.Path,
                                         val module: Module,
@@ -83,12 +91,14 @@ object Logika {
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
       val checkFileUris = HashSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
-      val (nameMap, typeMap, programs, info2, changed): (Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) =
+      val (inputs, nameMap, typeMap, programs, info2, changed): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) =
         info.thMap.get(module.id) match {
           case Some(th) if !info.all && !shouldProcess =>
-            var nm = th.nameMap
-            var tm = th.typeMap
-            if (checkFilePaths.nonEmpty) {
+            if (checkFilePaths.isEmpty) {
+              return (info, F)
+            } else {
+              var nm = th.nameMap
+              var tm = th.typeMap
               for (info <- nm.values if info.posOpt.nonEmpty) {
                 info.posOpt.get.uriOpt match {
                   case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
@@ -106,9 +116,7 @@ object Logika {
                 if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
                 else inputs.map(FrontEnd.parseGloballyResolve _)).
                 foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
-              (q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
-            } else {
-              (nm, tm, ISZ(), info, F)
+              (inputs.s, q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
             }
           case _ =>
             var nm: Resolver.NameMap = HashMap.empty
@@ -130,9 +138,9 @@ object Logika {
               nm = nm ++ mth.nameMap.entries
               tm = tm ++ mth.typeMap.entries
             }
-            (nm, tm, q._2, info(messages = info.messages ++ q._1), T)
+            (inputs.s, nm, tm, q._2, info(messages = info.messages ++ q._1), T)
         }
-      val rep = Reporter.create
+      val rep = Logika.Reporter.create
       rep.reports(info2.messages)
       if (!rep.hasError && changed) {
         var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), rep)
@@ -168,8 +176,28 @@ object Logika {
           files = newFiles,
           stop = info3.files.nonEmpty ->: newFiles.isEmpty
         )
-        // TODO: Verify programs
-        return (info4, changed)
+        if (!info.verify) {
+          return (info4, changed)
+        }
+        val config = info.config
+        Logika.checkPrograms(
+          sources = for (input <- inputs) yield (input.fileUriOpt, input.content),
+          files = checkFileUris.elements,
+          config = config,
+          th = th,
+          smt2f = (th: TypeHierarchy) =>
+            Smt2Impl.create(config.smt2Configs, th, Smt2Impl.NoCache(), config.timeoutInMs, config.charBitWidth,
+              config.intBitWidth, config.simplifiedQuery, rep),
+          reporter = rep,
+          par = par,
+          strictAliasing = strictAliasing,
+          sanityCheck = info.sanityCheck,
+          plugins = info.plugins,
+          line = info.lineOpt.getOrElseEager(0),
+          skipMethods = info.skipMethods,
+          skipTypes = info.skipTypes
+        )
+        return (info4(messages = rep.messages), T)
       } else {
         return (info2, changed)
       }

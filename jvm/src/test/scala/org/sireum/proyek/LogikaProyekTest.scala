@@ -28,8 +28,9 @@ import org.sireum._
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.symbol.Info
 import org.sireum.project._
-import org.sireum.proyek.Logika.LogikaModuleProcessor
+import org.sireum.proyek.LogikaVerifier.LogikaModuleProcessor
 import org.sireum.test._
+import org.sireum.logika.LogikaTest
 
 object LogikaProyekTest {
 
@@ -194,13 +195,20 @@ class LogikaProyekTest extends TestSuite {
       test2Slang.writeOver(test2SlangContent)
       val test2Sources = ISZ(test2Slang)
 
-      val vi = proyek.Logika.VerificationInfo(
+      val config = LogikaTest.config
+      val vi = proyek.LogikaVerifier.VerificationInfo(
         thMap = HashMap.empty,
         files = HashSMap.empty + test2Slang.string ~> test2SlangContent,
         messages = ISZ(),
         lineOpt = None(),
         all = F,
-        stop = F
+        stop = F,
+        verify = F,
+        sanityCheck = T,
+        config = config,
+        plugins = org.sireum.logika.Logika.defaultPlugins,
+        skipMethods = ISZ(),
+        skipTypes = ISZ()
       )
 
       val (vi2, r2) = tempProject.test1Lmp.process(vi, T, tempProject.dm, test1Sources, ISZ())
