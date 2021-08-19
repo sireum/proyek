@@ -88,7 +88,7 @@ object Logika {
             }
           }
           if (checkFileUris.nonEmpty) {
-            val inputs = ops.ISZOps(for (pair <- checkFileUris.entries) yield FrontEnd.Input(pair._2, Some(Os.path(pair._1).toUri), 0))
+            val inputs = ops.ISZOps(for (pair <- checkFileUris.entries) yield FrontEnd.Input(pair._2, Some(pair._1), 0))
             for (info <- nm.values if info.posOpt.nonEmpty) {
               info.posOpt.get.uriOpt match {
                 case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
