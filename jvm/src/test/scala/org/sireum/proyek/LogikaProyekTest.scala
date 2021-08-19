@@ -216,7 +216,7 @@ class LogikaProyekTest extends TestSuite {
       assert(vi3.thMap.get("test2").nonEmpty)
 
       val (vi4, r4) = tempProject.test2Lmp.process(
-        vi3(files = vi3.files + test2Slang.toUri ~> test2SlangContent2), F, tempProject.dm, test2Sources, ISZ())
+        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), F, tempProject.dm, test2Sources, ISZ())
       assert(r4)
       assert(vi4.messages.isEmpty)
       assert(sysid(vi4.thMap.get("test1").get) == sysid(vi2.thMap.get("test1").get))
