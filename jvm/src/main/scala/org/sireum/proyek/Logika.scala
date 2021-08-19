@@ -79,15 +79,16 @@ object Logika {
         }
       }
       val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
-      val checkFilePaths = ops.ISZOps(sourceFilePaths).filter((p: String) => info.all || info.files.contains(p))
+      val checkFilePaths: ISZ[String] =
+        if (info.all) sourceFilePaths
+        else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
       val checkFileUris = HashSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
       val (nameMap, typeMap, programs, info2, changed): (Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) =
         info.thMap.get(module.id) match {
-          case Some(th) if info.all || !shouldProcess =>
+          case Some(th) if !info.all && !shouldProcess =>
             var nm = th.nameMap
             var tm = th.typeMap
             if (checkFilePaths.nonEmpty) {
-              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
               for (info <- nm.values if info.posOpt.nonEmpty) {
                 info.posOpt.get.uriOpt match {
                   case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
@@ -100,10 +101,10 @@ object Logika {
                   case _ =>
                 }
               }
-              val results = ops.ISZOps(
+              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
+              val q = ops.ISZOps(
                 if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
-                else inputs.map(FrontEnd.parseGloballyResolve _))
-              val q = results.
+                else inputs.map(FrontEnd.parseGloballyResolve _)).
                 foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
               (q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
             } else {
@@ -118,10 +119,9 @@ object Logika {
               tm = tm ++ mth.typeMap.entries
             }
             val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(p))
-            val results = ops.ISZOps(
+            val q = ops.ISZOps(
               if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
-              else inputs.map(FrontEnd.parseGloballyResolve _))
-            val q = results.
+              else inputs.map(FrontEnd.parseGloballyResolve _)).
               foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
             nm = q._3
             tm = q._4
