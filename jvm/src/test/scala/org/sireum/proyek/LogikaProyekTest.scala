@@ -196,7 +196,7 @@ class LogikaProyekTest extends TestSuite {
 
       val vi = proyek.Logika.VerificationInfo(
         thMap = HashMap.empty,
-        files = HashSMap.empty + test2Slang.toUri ~> test2SlangContent,
+        files = HashSMap.empty + test2Slang.string ~> test2SlangContent,
         messages = ISZ(),
         lineOpt = None(),
         all = F,
