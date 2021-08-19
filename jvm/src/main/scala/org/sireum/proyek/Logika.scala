@@ -80,18 +80,24 @@ object Logika {
         case Some(th) if info.all || !shouldProcess =>
           var nm = th.nameMap
           var tm = th.typeMap
-          val checkFiles = HashSMap ++ (for (e <- info.files.entries if fileUriSet.contains(e._1)) yield e)
-          if (checkFiles.nonEmpty) {
-            val inputs = ops.ISZOps(for (pair <- checkFiles.entries) yield FrontEnd.Input(pair._2, Some(Os.path(pair._1).toUri), 0))
+          var checkFileUris = HashSMap.empty[String, String]
+          for (e <- info.files.entries) {
+            val uri = Os.path(e._1).toUri
+            if (fileUriSet.contains(uri)) {
+              checkFileUris = checkFileUris + uri ~> e._2
+            }
+          }
+          if (checkFileUris.nonEmpty) {
+            val inputs = ops.ISZOps(for (pair <- checkFileUris.entries) yield FrontEnd.Input(pair._2, Some(Os.path(pair._1).toUri), 0))
             for (info <- nm.values if info.posOpt.nonEmpty) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFiles.contains(uri) => nm = nm - ((info.name, info))
+                case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
                 case _ =>
               }
             }
             for (info <- tm.values if info.posOpt.nonEmpty) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFiles.contains(uri) => tm = tm - ((info.name, info))
+                case Some(uri) if checkFileUris.contains(uri) => tm = tm - ((info.name, info))
                 case _ =>
               }
             }
