@@ -215,19 +215,25 @@ class LogikaProyekTest extends TestSuite {
       assert(sysid(vi3.thMap.get("test1").get) == sysid(vi2.thMap.get("test1").get))
       assert(vi3.thMap.get("test2").nonEmpty)
 
-      val (vi4, r4) = tempProject.test2Lmp.process(
-        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), F, tempProject.dm, test2Sources, ISZ())
-      assert(r4)
+      val (vi4, r4) = tempProject.test1Lmp.process(
+        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), F, tempProject.dm, test1Sources, ISZ())
+      assert(!r4)
       assert(vi4.messages.isEmpty)
-      assert(sysid(vi4.thMap.get("test1").get) == sysid(vi2.thMap.get("test1").get))
-      assert(sysid(vi4.thMap.get("test2").get) != sysid(vi3.thMap.get("test2").get))
+      assert(sysid(vi4.thMap.get("test1").get) == sysid(vi3.thMap.get("test1").get))
+      assert(sysid(vi4.thMap.get("test2").get) == sysid(vi3.thMap.get("test2").get))
+
+      val (vi5, r5) = tempProject.test2Lmp.process(vi4, F, tempProject.dm, test2Sources, ISZ())
+      assert(r5)
+      assert(vi5.messages.isEmpty)
+      assert(sysid(vi5.thMap.get("test1").get) == sysid(vi4.thMap.get("test1").get))
+      assert(sysid(vi5.thMap.get("test2").get) != sysid(vi4.thMap.get("test2").get))
 
       val yFQ = ISZ[String]("test2", "Test2", "y")
-      val vi3th2 = vi3.thMap.get("test2").get
-      assert(vi3th2.nameMap.get(yFQ).get.asInstanceOf[Info.Var].typedOpt.get == AST.Typed.z)
-
       val vi4th2 = vi4.thMap.get("test2").get
-      assert(vi4th2.nameMap.get(yFQ).get.asInstanceOf[Info.Var].typedOpt.get == AST.Typed.b)
+      assert(vi4th2.nameMap.get(yFQ).get.asInstanceOf[Info.Var].typedOpt.get == AST.Typed.z)
+
+      val vi5th2 = vi5.thMap.get("test2").get
+      assert(vi5th2.nameMap.get(yFQ).get.asInstanceOf[Info.Var].typedOpt.get == AST.Typed.b)
 
       tempProject.root.removeAll()
     }

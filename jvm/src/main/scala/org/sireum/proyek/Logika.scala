@@ -71,77 +71,67 @@ object Logika {
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path]): (VerificationInfo, B) = {
-      val fileUriSet = HashSSet.empty[String] ++ (for (p <- sourceFiles ++ testSourceFiles) yield p.toUri)
-      val checkUriSet: HashSSet[String] =
-        if (info.all) fileUriSet
-        else HashSSet.empty[String] ++ (for (p <- info.files.keys) yield Os.path(p).toUri)
-      val thOpt = info.thMap.get(module.id)
-      val (nameMap, typeMap, programs, info2, changed): (Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) = thOpt match {
-        case Some(th) if info.all || !shouldProcess =>
-          var nm = th.nameMap
-          var tm = th.typeMap
-          var checkFileUris = HashSMap.empty[String, String]
-          for (e <- info.files.entries) {
-            val uri = Os.path(e._1).toUri
-            if (fileUriSet.contains(uri)) {
-              checkFileUris = checkFileUris + uri ~> e._2
-            }
-          }
-          if (checkFileUris.nonEmpty) {
-            val inputs = ops.ISZOps(for (pair <- checkFileUris.entries) yield FrontEnd.Input(pair._2, Some(pair._1), 0))
-            for (info <- nm.values if info.posOpt.nonEmpty) {
-              info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
-                case _ =>
+      def toInput(p: Os.Path): FrontEnd.Input = {
+        val uri = p.toUri
+        info.files.get(p.string) match {
+          case Some(content) => return FrontEnd.Input(content, Some(uri), 0)
+          case _ => return FrontEnd.Input(p.read, Some(uri), p.lastModified)
+        }
+      }
+      val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
+      val checkFilePaths = ops.ISZOps(sourceFilePaths).filter((p: String) => info.all || info.files.contains(p))
+      val checkFileUris = HashSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
+      val (nameMap, typeMap, programs, info2, changed): (Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) =
+        info.thMap.get(module.id) match {
+          case Some(th) if info.all || !shouldProcess =>
+            var nm = th.nameMap
+            var tm = th.typeMap
+            if (checkFilePaths.nonEmpty) {
+              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
+              for (info <- nm.values if info.posOpt.nonEmpty) {
+                info.posOpt.get.uriOpt match {
+                  case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
+                  case _ =>
+                }
               }
-            }
-            for (info <- tm.values if info.posOpt.nonEmpty) {
-              info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFileUris.contains(uri) => tm = tm - ((info.name, info))
-                case _ =>
+              for (info <- tm.values if info.posOpt.nonEmpty) {
+                info.posOpt.get.uriOpt match {
+                  case Some(uri) if checkFileUris.contains(uri) => tm = tm - ((info.name, info))
+                  case _ =>
+                }
               }
+              val results = ops.ISZOps(
+                if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
+                else inputs.map(FrontEnd.parseGloballyResolve _))
+              val q = results.
+                foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
+              (q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
+            } else {
+              (nm, tm, ISZ(), info, F)
             }
+          case _ =>
+            var nm: Resolver.NameMap = HashMap.empty
+            var tm: Resolver.TypeMap = HashMap.empty
+            for (mid <- dm.project.poset.parentsOf(module.id).elements) {
+              val mth = info.thMap.get(mid).get
+              nm = nm ++ mth.nameMap.entries
+              tm = tm ++ mth.typeMap.entries
+            }
+            val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(p))
             val results = ops.ISZOps(
               if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
               else inputs.map(FrontEnd.parseGloballyResolve _))
             val q = results.
               foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
-            (q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
-          } else {
-            (nm, tm, ISZ(), info, F)
-          }
-        case _ =>
-          def toInput(p: Os.Path): FrontEnd.Input = {
-            val uri = p.toUri
-            info.files.get(p.string) match {
-              case Some(content) => return FrontEnd.Input(content, Some(uri), p.lastModified)
-              case _ => return FrontEnd.Input(p.read, Some(uri), p.lastModified)
+            nm = q._3
+            tm = q._4
+            if (tm.get(AST.Typed.isName).isEmpty) {
+              val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
+              nm = nm ++ mth.nameMap.entries
+              tm = tm ++ mth.typeMap.entries
             }
-          }
-          val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(p))
-          val results = ops.ISZOps(
-            if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
-            else inputs.map(FrontEnd.parseGloballyResolve _))
-          var nm: Resolver.NameMap = HashMap.empty
-          var tm: Resolver.TypeMap = HashMap.empty
-          for (mid <- dm.project.poset.parentsOf(module.id).elements) {
-            val mth = info.thMap.get(mid).get
-            nm = nm ++ mth.nameMap.entries
-            tm = tm ++ mth.typeMap.entries
-          }
-          val q = results.
-            foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
-          nm = q._3
-          tm = q._4
-          if (tm.get(AST.Typed.isName).isEmpty) {
-            val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
-            nm = nm ++ mth.nameMap.entries
-            tm = tm ++ mth.typeMap.entries
-          }
-          (nm, tm,
-            for (program <- q._2 if info.all || checkUriSet.contains(program.fileUriOpt.get)) yield program,
-            info(messages = info.messages ++ q._1), T)
-      }
+            (nm, tm, q._2, info(messages = info.messages ++ q._1), T)
+        }
       val rep = Reporter.create
       rep.reports(info2.messages)
       if (!rep.hasError && changed) {
@@ -155,13 +145,13 @@ object Logika {
           if (nm.nonEmpty || tm.nonEmpty) {
             for (info <- th.nameMap.values) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if fileUriSet.contains(uri) && checkUriSet.contains(uri) => nm = nm + info.name ~> info
+                case Some(uri) if checkFileUris.contains(uri) => nm = nm + info.name ~> info
                 case _ =>
               }
             }
             for (info <- th.typeMap.values) {
               info.posOpt.get.uriOpt match {
-                case Some(uri) if fileUriSet.contains(uri) && checkUriSet.contains(uri) => tm = tm + info.name ~> info
+                case Some(uri) if checkFileUris.contains(uri) => tm = tm + info.name ~> info
                 case _ =>
               }
             }
@@ -172,7 +162,7 @@ object Logika {
         if (rep.hasError) {
           return (info3(stop = T), changed)
         }
-        val newFiles = info2.files -- (checkUriSet -- fileUriSet.elements).elements
+        val newFiles = info2.files -- checkFilePaths
         val info4 = info3(
           thMap = info3.thMap + module.id ~> th,
           files = newFiles,
