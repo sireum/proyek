@@ -38,19 +38,19 @@ object Compile {
     "Error"
   }
 
-  @datatype class CompileModuleProcessor(val root: Os.Path,
-                                         val module: Module,
-                                         val force: B,
-                                         val par: B,
-                                         val sha3: B,
-                                         val followSymLink: B,
-                                         val outDir: Os.Path,
-                                         val javaHome: Os.Path,
-                                         val scalaHome: Os.Path,
-                                         val javacOptions: ISZ[String],
-                                         val scalacOptions: ISZ[String],
-                                         val scalacPlugin: Os.Path,
-                                         val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String)] {
+  @record class CompileModuleProcessor(val root: Os.Path,
+                                       val module: Module,
+                                       val force: B,
+                                       val par: B,
+                                       val sha3: B,
+                                       val followSymLink: B,
+                                       val outDir: Os.Path,
+                                       val javaHome: Os.Path,
+                                       val scalaHome: Os.Path,
+                                       val javacOptions: ISZ[String],
+                                       val scalacOptions: ISZ[String],
+                                       val scalacPlugin: Os.Path,
+                                       val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String), B] {
 
     @pure override def fileFilter(file: Os.Path): B = {
       var r: B = file.ext == "scala"
@@ -61,6 +61,7 @@ object Compile {
     }
 
     override def process(o: (CompileStatus.Type, String),
+                         ignore: B,
                          shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
@@ -251,7 +252,7 @@ object Compile {
           scalacOptions = scalacOptions,
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
-        ).run((CompileStatus.Compiled, ""), dm)
+        ).run((CompileStatus.Compiled, ""), T, dm)
         val r: ISZ[(CompileStatus.Type, String)] =
           if (par) ops.ISZOps(nexts).mParMap(compileModule)
           else for (next <- nexts) yield compileModule(next)

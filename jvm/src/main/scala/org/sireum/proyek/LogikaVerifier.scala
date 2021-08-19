@@ -31,7 +31,7 @@ import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.tipe.{TypeChecker, TypeHierarchy, TypeOutliner}
 import org.sireum.logika.plugin.Plugin
-import org.sireum.logika.{Config, Logika, Smt2Impl}
+import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
 import org.sireum.message.Message
 import org.sireum.project._
 
@@ -44,18 +44,17 @@ object LogikaVerifier {
                                    val all: B,
                                    val stop: B,
                                    val verify: B,
-                                   val sanityCheck: B,
                                    val config: Config,
                                    val plugins: ISZ[Plugin],
                                    val skipMethods: ISZ[String],
                                    val skipTypes: ISZ[String])
 
-  @datatype class LogikaModuleProcessor(val root: Os.Path,
-                                        val module: Module,
-                                        val par: B,
-                                        val strictAliasing: B,
-                                        val followSymLink: B,
-                                        val outDir: Os.Path) extends ModuleProcessor[VerificationInfo] {
+  @record class LogikaModuleProcessor(val root: Os.Path,
+                                      val module: Module,
+                                      val par: B,
+                                      val strictAliasing: B,
+                                      val followSymLink: B,
+                                      val outDir: Os.Path) extends ModuleProcessor[VerificationInfo, Smt2.Cache] {
 
     @strictpure def sha3: B = F
 
@@ -75,6 +74,7 @@ object LogikaVerifier {
     }
 
     override def process(info: VerificationInfo,
+                         cache: Smt2.Cache,
                          shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
@@ -86,12 +86,13 @@ object LogikaVerifier {
           case _ => return FrontEnd.Input(p.read, Some(uri), p.lastModified)
         }
       }
+
       val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
       val checkFileUris = HashSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
-      val (inputs, nameMap, typeMap, programs, info2, changed): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, ISZ[AST.TopUnit.Program], VerificationInfo, B) =
+      val (nameMap, typeMap, info2, changed): (Resolver.NameMap, Resolver.TypeMap, VerificationInfo, B) =
         info.thMap.get(module.id) match {
           case Some(th) if !info.all && !shouldProcess =>
             if (checkFilePaths.isEmpty) {
@@ -116,7 +117,7 @@ object LogikaVerifier {
                 if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
                 else inputs.map(FrontEnd.parseGloballyResolve _)).
                 foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
-              (inputs.s, q._3, q._4, q._2, info(messages = info.messages ++ q._1), T)
+              (q._3, q._4, info(messages = info.messages ++ q._1), T)
             }
           case _ =>
             var nm: Resolver.NameMap = HashMap.empty
@@ -138,7 +139,7 @@ object LogikaVerifier {
               nm = nm ++ mth.nameMap.entries
               tm = tm ++ mth.typeMap.entries
             }
-            (inputs.s, nm, tm, q._2, info(messages = info.messages ++ q._1), T)
+            (nm, tm, info(messages = info.messages ++ q._1), T)
         }
       val rep = Logika.Reporter.create
       rep.reports(info2.messages)
@@ -180,18 +181,17 @@ object LogikaVerifier {
           return (info4, changed)
         }
         val config = info.config
-        Logika.checkPrograms(
-          sources = for (input <- inputs) yield (input.fileUriOpt, input.content),
-          files = checkFileUris.elements,
+        Logika.checkTypedPrograms(
+          verifyingStartTime = 0,
+          fileSet = checkFileUris,
           config = config,
           th = th,
           smt2f = (th: TypeHierarchy) =>
-            Smt2Impl.create(config.smt2Configs, th, Smt2Impl.NoCache(), config.timeoutInMs, config.charBitWidth,
+            Smt2Impl.create(config.smt2Configs, th, config.timeoutInMs, config.charBitWidth,
               config.intBitWidth, config.simplifiedQuery, rep),
+          cache = cache,
           reporter = rep,
           par = par,
-          strictAliasing = strictAliasing,
-          sanityCheck = info.sanityCheck,
           plugins = info.plugins,
           line = info.lineOpt.getOrElseEager(0),
           skipMethods = info.skipMethods,

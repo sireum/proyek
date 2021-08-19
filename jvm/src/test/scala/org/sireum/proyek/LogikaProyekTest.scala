@@ -30,7 +30,7 @@ import org.sireum.lang.symbol.Info
 import org.sireum.project._
 import org.sireum.proyek.LogikaVerifier.LogikaModuleProcessor
 import org.sireum.test._
-import org.sireum.logika.LogikaTest
+import org.sireum.logika.{LogikaTest, Smt2}
 
 object LogikaProyekTest {
 
@@ -204,33 +204,33 @@ class LogikaProyekTest extends TestSuite {
         all = F,
         stop = F,
         verify = F,
-        sanityCheck = T,
         config = config,
         plugins = org.sireum.logika.Logika.defaultPlugins,
         skipMethods = ISZ(),
         skipTypes = ISZ()
       )
+      val cache = Smt2.NoCache()
 
-      val (vi2, r2) = tempProject.test1Lmp.process(vi, T, tempProject.dm, test1Sources, ISZ())
+      val (vi2, r2) = tempProject.test1Lmp.process(vi, cache, T, tempProject.dm, test1Sources, ISZ())
       assert(r2)
       assert(vi2.messages.isEmpty)
       assert(vi2.thMap.get("test1").nonEmpty)
       assert(vi2.thMap.get("test2").isEmpty)
 
-      val (vi3, r3) = tempProject.test2Lmp.process(vi2, T, tempProject.dm, test2Sources, ISZ())
+      val (vi3, r3) = tempProject.test2Lmp.process(vi2, cache, T, tempProject.dm, test2Sources, ISZ())
       assert(r3)
       assert(vi3.messages.isEmpty)
       assert(sysid(vi3.thMap.get("test1").get) == sysid(vi2.thMap.get("test1").get))
       assert(vi3.thMap.get("test2").nonEmpty)
 
       val (vi4, r4) = tempProject.test1Lmp.process(
-        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), F, tempProject.dm, test1Sources, ISZ())
+        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), cache, F, tempProject.dm, test1Sources, ISZ())
       assert(!r4)
       assert(vi4.messages.isEmpty)
       assert(sysid(vi4.thMap.get("test1").get) == sysid(vi3.thMap.get("test1").get))
       assert(sysid(vi4.thMap.get("test2").get) == sysid(vi3.thMap.get("test2").get))
 
-      val (vi5, r5) = tempProject.test2Lmp.process(vi4, F, tempProject.dm, test2Sources, ISZ())
+      val (vi5, r5) = tempProject.test2Lmp.process(vi4, cache, F, tempProject.dm, test2Sources, ISZ())
       assert(r5)
       assert(vi5.messages.isEmpty)
       assert(sysid(vi5.thMap.get("test1").get) == sysid(vi4.thMap.get("test1").get))
