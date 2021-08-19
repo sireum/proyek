@@ -52,7 +52,7 @@ object Compile {
                                        val scalacPlugin: Os.Path,
                                        val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String), B] {
 
-    @pure override def fileFilter(file: Os.Path): B = {
+    @pure override def fileFilter(ignore: (CompileStatus.Type, String), file: Os.Path): B = {
       var r: B = file.ext == "scala"
       if (!isJs) {
         r = r || file.ext == "java"
