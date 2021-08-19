@@ -91,6 +91,11 @@ object cli {
     )
   )
 
+  val parOpt: Opt = Opt(name = "par", longKey = "par", shortKey = Some('p'),
+    tpe = Type.Flag(F),
+    description = "Enable parallelization"
+  )
+
   val commonCompileOpts: ISZ[Opt] = ISZ(
     Opt(name = "javac", longKey = "javac", shortKey = None(),
       tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options")),
@@ -100,10 +105,7 @@ object cli {
       tpe = Type.Flag(F),
       description = "Fresh compilation from a clean slate"
     ),
-    Opt(name = "par", longKey = "par", shortKey = Some('p'),
-      tpe = Type.Flag(F),
-      description = "Enable parallelization"
-    ),
+    parOpt,
     Opt(name = "recompile", longKey = "recompile", shortKey = None(),
       tpe = Type.Str(Some(','), None()),
       description = "Module IDs to force recompilation on"
@@ -206,12 +208,19 @@ object cli {
     command = "logika",
     description = "Sireum Logika for Proyek",
     header = "Sireum Logika for Proyek",
-    usage = "<options>* <file>*",
+    usage = "<options>* <dir> <file>*",
     usageDescOpt = None(),
     opts = ISZ(
+      Opt(
+        name = "all", longKey = "all", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Check all Slang files"
+      ),
+      org.sireum.lang.cli.strictAliasingOpt
     ),
     groups = ISZ(
       projectOptGroup,
+      ivyOptGroup
     ) ++ org.sireum.logika.cli.logikaVerifier.groups
   )
 
@@ -247,6 +256,7 @@ object cli {
     )
   )
 
+
   val runTool: Tool = Tool(
     name = "run",
     command = "run",
@@ -271,6 +281,7 @@ object cli {
       ivyOptGroup
     )
   )
+
 
   val testTool: Tool = Tool(
     name = "test",
@@ -307,12 +318,31 @@ object cli {
     )
   )
 
+
+  val tipeProyekTool: Tool = Tool(
+    name = "tipe",
+    command = "tipe",
+    description = "Slang proyek type checker",
+    header = "Sireum Proyek Type Checker",
+    usage = "<options>* <dir>",
+    usageDescOpt = None(),
+    opts = ISZ(
+      parOpt,
+      org.sireum.lang.cli.strictAliasingOpt
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      ivyOptGroup
+    )
+  )
+
+
   val group: Group = Group(
     name = "proyek",
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, testTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, testTool, tipeProyekTool)
   )
 
 }

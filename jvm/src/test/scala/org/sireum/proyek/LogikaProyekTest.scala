@@ -28,7 +28,7 @@ import org.sireum._
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.symbol.Info
 import org.sireum.project._
-import org.sireum.proyek.LogikaVerifier.LogikaModuleProcessor
+import org.sireum.proyek.LogikaProyek.LogikaModuleProcessor
 import org.sireum.test._
 import org.sireum.logika.{LogikaTest, Smt2}
 
@@ -54,7 +54,7 @@ object LogikaProyekTest {
         subPathOpt = None() ,
         deps = ISZ(),
         targets = ISZ(Target.Jvm),
-        ivyDeps = ISZ(),
+        ivyDeps = ISZ(DependencyManager.libraryKey),
         sources = ISZ("src"),
         resources = ISZ(),
         testSources = ISZ(),
@@ -108,6 +108,7 @@ object LogikaProyekTest {
           val k = ks.nextElement
           m = m + k.toString.replace('%', ':').string ~> prop.get(k).string
         }
+        m = m + DependencyManager.libraryKey ~> "SNAPSHOT"
         m
       },
       isJs = F,
@@ -196,7 +197,7 @@ class LogikaProyekTest extends TestSuite {
       val test2Sources = ISZ(test2Slang)
 
       val config = LogikaTest.config
-      val vi = proyek.LogikaVerifier.VerificationInfo(
+      val vi = proyek.LogikaProyek.VerificationInfo(
         thMap = HashMap.empty,
         files = HashSMap.empty + test2Slang.string ~> test2SlangContent,
         messages = ISZ(),

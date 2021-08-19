@@ -35,7 +35,7 @@ import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
 import org.sireum.message.Message
 import org.sireum.project._
 
-object LogikaVerifier {
+object LogikaProyek {
 
   @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
                                    val files: HashSMap[String, String],
@@ -61,7 +61,10 @@ object LogikaVerifier {
 
     @pure override def fileFilter(vi: VerificationInfo, file: Os.Path): B = {
       val ext = file.ext
-      if (ext != "scala" && ext != "slang") {
+      if (ext == "slang") {
+        return T
+      }
+      if (ext != "scala") {
         return F
       }
       vi.files.get(file.string) match {
@@ -76,6 +79,7 @@ object LogikaVerifier {
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path]): (VerificationInfo, B) = {
+      //println(s"Checking ${module.id} ...")
       def toInput(p: Os.Path): FrontEnd.Input = {
         val uri = p.toUri
         info.files.get(p.string) match {
@@ -119,97 +123,108 @@ object LogikaVerifier {
           case _ =>
             var nm: Resolver.NameMap = HashMap.empty
             var tm: Resolver.TypeMap = HashMap.empty
+            if ((HashSet ++ module.ivyDeps).contains(DependencyManager.libraryKey)) {
+              val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
+              nm = nm ++ mth.nameMap.entries
+              tm = tm ++ mth.typeMap.entries
+            }
             for (mid <- dm.project.poset.parentsOf(module.id).elements) {
               val mth = info.thMap.get(mid).get
               nm = nm ++ mth.nameMap.entries
               tm = tm ++ mth.typeMap.entries
             }
             val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(p))
+            if (inputs.s.isEmpty) {
+              if (nm.isEmpty && tm.isEmpty) {
+                return (info(thMap = info.thMap + module.id ~> TypeHierarchy.empty), T)
+              }
+            } else {
+              val pair = Resolver.addBuiltIns(nm, tm)
+              nm = pair._1
+              tm = pair._2
+            }
             val q = ops.ISZOps(
               if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
               else inputs.map(FrontEnd.parseGloballyResolve _)).
               foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
             nm = q._3
             tm = q._4
-            if (tm.get(AST.Typed.isName).isEmpty) {
-              val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
-              nm = nm ++ mth.nameMap.entries
-              tm = tm ++ mth.typeMap.entries
-            }
             (inputs.s, nm, tm, info(messages = info.messages ++ q._1), T)
         }
+      //for (p <- checkFilePaths) {
+      //  println(s"Parsed $p")
+      //}
       val rep = Logika.Reporter.create
       rep.reports(info2.messages)
-      if (!rep.hasError && changed) {
-        var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), rep)
-        if (!rep.hasError) {
-          th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
+      if (rep.hasError || !changed) {
+        return (info2, F)
+      }
+      var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), rep)
+      if (!rep.hasError) {
+        th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
+      }
+      val verifyFileUris: HashSet[String] = if (info.all) {
+        var vfus = HashSet.empty[String]
+        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
+          vfus = vfus + input.fileUriOpt.get
         }
-        if (!rep.hasError) {
-          var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
-          var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-          if (nm.nonEmpty || tm.nonEmpty) {
-            for (info <- th.nameMap.values) {
-              info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFileUris.contains(uri) => nm = nm + info.name ~> info
-                case _ =>
-              }
-            }
-            for (info <- th.typeMap.values) {
-              info.posOpt.get.uriOpt match {
-                case Some(uri) if checkFileUris.contains(uri) => tm = tm + info.name ~> info
-                case _ =>
-              }
-            }
-            th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
+        vfus
+      } else {
+        checkFileUris
+      }
+      if (!rep.hasError) {
+        var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
+        var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
+        for (info <- th.nameMap.values if info.posOpt.nonEmpty) {
+          info.posOpt.get.uriOpt match {
+            case Some(uri) if verifyFileUris.contains(uri) =>
+              nm = nm + info.name ~> info
+            case _ =>
           }
         }
-        val info3 = info2(messages = rep.messages)
-        if (rep.hasError) {
-          return (info3, changed)
+        for (info <- th.typeMap.values if info.posOpt.nonEmpty) {
+          info.posOpt.get.uriOpt match {
+            case Some(uri) if verifyFileUris.contains(uri) =>
+              tm = tm + info.name ~> info
+            case _ =>
+          }
         }
-        val newFiles = info2.files -- checkFilePaths
-        val info4 = info3(
-          thMap = info3.thMap + module.id ~> th,
-          files = newFiles
-        )
-        var verifyFileUris = HashSet.empty[String]
-        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
-          verifyFileUris = verifyFileUris + input.fileUriOpt.get
-        }
-        if (!info.verify || verifyFileUris.isEmpty) {
-          return (info4, changed)
-        }
-        val config = info.config
-        Logika.checkTypedPrograms(
-          verifyingStartTime = 0,
-          fileSet = verifyFileUris,
-          config = config,
-          th = th,
-          smt2f = (th: TypeHierarchy) =>
-            Smt2Impl.create(config.smt2Configs, th, config.timeoutInMs, config.charBitWidth,
-              config.intBitWidth, config.simplifiedQuery, rep),
-          cache = cache,
-          reporter = rep,
-          par = par,
-          plugins = info.plugins,
-          line = info.line,
-          skipMethods = info.skipMethods,
-          skipTypes = info.skipTypes
-        )
-        return (info4(messages = rep.messages), T)
-      } else {
-        return (info2, changed)
+        th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
       }
+      val info3 = info2(messages = rep.messages)
+      if (rep.hasError) {
+        return (info3, F)
+      }
+      val newFiles = info2.files -- checkFilePaths
+      val info4 = info3(
+        thMap = info3.thMap + module.id ~> th,
+        files = newFiles
+      )
+      if (!info.verify) {
+        return (info4, F)
+      }
+      if (verifyFileUris.isEmpty) {
+        return (info4, changed)
+      }
+      val config = info.config
+      Logika.checkTypedPrograms(
+        verifyingStartTime = 0,
+        fileSet = verifyFileUris,
+        config = config,
+        th = th,
+        smt2f = (th: TypeHierarchy) =>
+          Smt2Impl.create(config.smt2Configs, th, config.timeoutInMs, config.charBitWidth,
+            config.intBitWidth, config.simplifiedQuery, rep),
+        cache = cache,
+        reporter = rep,
+        par = par,
+        plugins = info.plugins,
+        line = info.line,
+        skipMethods = info.skipMethods,
+        skipTypes = info.skipTypes
+      )
+      return (info4(messages = rep.messages), !rep.hasError)
     }
-  }
-
-  @pure def firstCompactLineOps(cs: Jen[C]): ops.StringOps = {
-    var cis = ISZ[C]()
-    for (c <- cs.takeWhile((c: C) => c != '\n') if !c.isWhitespace) {
-      cis = cis :+ c
-    }
-    return ops.StringOps(conversions.String.fromCis(cis))
   }
 
   def run(root: Os.Path,
@@ -246,19 +261,21 @@ object LogikaVerifier {
     var modules = project.poset.rootNodes
     var seenModules = ISZ[String]()
     while (modules.nonEmpty) {
-      var nextModules = ISZ[String]()
+      var nextModules = HashSSet.empty[String]
       var workModules = ISZ[String]()
       for (module <- modules) {
         if ((project.poset.parentsOf(module) -- seenModules).isEmpty) {
           workModules = workModules :+ module
         } else {
-          nextModules = nextModules :+ module
+          nextModules = nextModules + module
         }
       }
+
       def shouldContinue: B = {
         return (all || vi.files.nonEmpty) && !message.ReporterImpl(vi.messages).hasError
       }
-      for (module <- nextModules if shouldContinue) {
+
+      for (module <- workModules if shouldContinue) {
         seenModules = seenModules :+ module
         vi = LogikaModuleProcessor(
           root = root,
@@ -272,10 +289,21 @@ object LogikaVerifier {
         nextModules = nextModules ++ project.poset.childrenOf(module).elements
       }
       if (shouldContinue) {
-        modules = nextModules
+        modules = nextModules.elements
+      } else {
+        modules = ISZ()
       }
     }
     reporter.reports(vi.messages)
     return if (reporter.hasError) -1 else 0
   }
+
+  @pure def firstCompactLineOps(cs: Jen[C]): ops.StringOps = {
+    var cis = ISZ[C]()
+    for (c <- cs.takeWhile((c: C) => c != '\n') if !c.isWhitespace) {
+      cis = cis :+ c
+    }
+    return ops.StringOps(conversions.String.fromCis(cis))
+  }
+
 }
