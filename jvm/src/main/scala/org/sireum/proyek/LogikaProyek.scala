@@ -163,30 +163,26 @@ object LogikaProyek {
       if (!rep.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
       }
-      val verifyFileUris: HashSet[String] = if (info.all) {
-        var vfus = HashSet.empty[String]
-        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
-          vfus = vfus + input.fileUriOpt.get
-        }
-        vfus
-      } else {
-        checkFileUris
-      }
       if (!rep.hasError) {
         var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
         var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-        for (info <- th.nameMap.values if info.posOpt.nonEmpty) {
-          info.posOpt.get.uriOpt match {
-            case Some(uri) if verifyFileUris.contains(uri) =>
-              nm = nm + info.name ~> info
-            case _ =>
+        if (info.all) {
+          nm = th.nameMap
+          tm = th.typeMap
+        } else {
+          for (ninfo <- th.nameMap.values if ninfo.posOpt.nonEmpty) {
+            ninfo.posOpt.get.uriOpt match {
+              case Some(uri) if checkFileUris.contains(uri) =>
+                nm = nm + ninfo.name ~> ninfo
+              case _ =>
+            }
           }
-        }
-        for (info <- th.typeMap.values if info.posOpt.nonEmpty) {
-          info.posOpt.get.uriOpt match {
-            case Some(uri) if verifyFileUris.contains(uri) =>
-              tm = tm + info.name ~> info
-            case _ =>
+          for (tinfo <- th.typeMap.values if tinfo.posOpt.nonEmpty) {
+            tinfo.posOpt.get.uriOpt match {
+              case Some(uri) if checkFileUris.contains(uri) =>
+                tm = tm + tinfo.name ~> tinfo
+              case _ =>
+            }
           }
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
@@ -203,8 +199,17 @@ object LogikaProyek {
       if (!info.verify) {
         return (info4, F)
       }
-      if (verifyFileUris.isEmpty) {
+      if (checkFileUris.isEmpty) {
         return (info4, changed)
+      }
+      val verifyFileUris: HashSet[String] = if (info.all) {
+        var vfus = HashSet.empty[String]
+        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
+          vfus = vfus + input.fileUriOpt.get
+        }
+        vfus
+      } else {
+        checkFileUris
       }
       val config = info.config
       Logika.checkTypedPrograms(
