@@ -233,7 +233,7 @@ class LogikaProyekTest extends TestSuite {
       assert(sysid(vi4.thMap.get("test2").get) == sysid(vi3.thMap.get("test2").get))
 
       val (vi5, r5) = tempProject.test2Lmp.process(vi4, cache, F, tempProject.dm, test2Sources, ISZ())
-      assert(r5)
+      assert(!r5)
       assert(vi5.messages.isEmpty)
       assert(sysid(vi5.thMap.get("test1").get) == sysid(vi4.thMap.get("test1").get))
       assert(sysid(vi5.thMap.get("test2").get) != sysid(vi4.thMap.get("test2").get))
