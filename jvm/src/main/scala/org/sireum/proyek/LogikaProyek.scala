@@ -29,7 +29,7 @@ import org.sireum._
 import org.sireum.lang.FrontEnd
 import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
-import org.sireum.lang.tipe.{TypeChecker, TypeHierarchy, TypeOutliner}
+import org.sireum.lang.tipe.{PostTipeAttrChecker, TypeChecker, TypeHierarchy, TypeOutliner}
 import org.sireum.logika.plugin.Plugin
 import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
 import org.sireum.message.Message
@@ -43,6 +43,8 @@ object LogikaProyek {
                                    val line: Z,
                                    val all: B,
                                    val verify: B,
+                                   val verbose: B,
+                                   val sanityCheck: B,
                                    val config: Config,
                                    val plugins: ISZ[Plugin],
                                    val skipMethods: ISZ[String],
@@ -79,7 +81,10 @@ object LogikaProyek {
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path]): (VerificationInfo, B) = {
-      //println(s"Checking ${module.id} ...")
+      if (info.verbose) {
+        println()
+        println(s"Checking ${module.id} ...")
+      }
       def toInput(p: Os.Path): FrontEnd.Input = {
         val uri = p.toUri
         info.files.get(p.string) match {
@@ -92,13 +97,19 @@ object LogikaProyek {
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
-      val checkFileUris = HashSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
+      val checkFileUris = HashSSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
       val (inputs, nameMap, typeMap, info2, changed): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo, B) =
         info.thMap.get(module.id) match {
           case Some(th) if !info.all && !shouldProcess =>
             if (checkFilePaths.isEmpty) {
               return (info, F)
             } else {
+              if (info.verbose && checkFileUris.nonEmpty) {
+                println("Parsing and type outlining files:")
+                for (uri <- checkFileUris.elements) {
+                  println(s"* ${Os.uriToPath(uri)}")
+                }
+              }
               var nm = th.nameMap
               var tm = th.typeMap
               for (info <- nm.values if info.posOpt.nonEmpty) {
@@ -121,6 +132,19 @@ object LogikaProyek {
               (inputs.s, q._3, q._4, info(messages = info.messages ++ q._1), T)
             }
           case _ =>
+            if (info.verbose && checkFileUris.nonEmpty) {
+              if (info.verify && !info.all) {
+                println("Parsing and type outlining files:")
+                for (p <- sourceFilePaths) {
+                  println(s"* $p")
+                }
+              } else {
+                println("Parsing, type outlining, and type checking files:")
+                for (p <- sourceFilePaths) {
+                  println(s"* $p")
+                }
+              }
+            }
             var nm: Resolver.NameMap = HashMap.empty
             var tm: Resolver.TypeMap = HashMap.empty
             if ((HashSet ++ module.ivyDeps).contains(DependencyManager.libraryKey)) {
@@ -151,9 +175,6 @@ object LogikaProyek {
             tm = q._4
             (inputs.s, nm, tm, info(messages = info.messages ++ q._1), T)
         }
-      //for (p <- checkFilePaths) {
-      //  println(s"Parsed $p")
-      //}
       val rep = Logika.Reporter.create
       rep.reports(info2.messages)
       if (rep.hasError || !changed) {
@@ -163,7 +184,35 @@ object LogikaProyek {
       if (!rep.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
       }
+      val verifyFileUris: HashSSet[String] = if (info.all) {
+        var vfus = HashSSet.empty[String]
+        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
+          vfus = vfus + input.fileUriOpt.get
+        }
+        vfus
+      } else {
+        checkFileUris
+      }
       if (!rep.hasError) {
+        if (info.verify && info.verbose) {
+          if (info.all) {
+            if (verifyFileUris.nonEmpty) {
+              println()
+              println("Verifying files:")
+              for (uri <- verifyFileUris.elements) {
+                println(s"* ${Os.uriToPath(uri)}")
+              }
+            }
+          } else {
+            if (verifyFileUris.nonEmpty) {
+              println()
+              println("Type checking and verifying files:")
+              for (uri <- verifyFileUris.elements) {
+                println(s"* ${Os.uriToPath(uri)}")
+              }
+            }
+          }
+        }
         var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
         var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
         if (info.all) {
@@ -172,20 +221,29 @@ object LogikaProyek {
         } else {
           for (ninfo <- th.nameMap.values if ninfo.posOpt.nonEmpty) {
             ninfo.posOpt.get.uriOpt match {
-              case Some(uri) if checkFileUris.contains(uri) =>
+              case Some(uri) if verifyFileUris.contains(uri) =>
                 nm = nm + ninfo.name ~> ninfo
               case _ =>
             }
           }
           for (tinfo <- th.typeMap.values if tinfo.posOpt.nonEmpty) {
             tinfo.posOpt.get.uriOpt match {
-              case Some(uri) if checkFileUris.contains(uri) =>
+              case Some(uri) if verifyFileUris.contains(uri) =>
                 tm = tm + tinfo.name ~> tinfo
               case _ =>
             }
           }
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
+        if (info.sanityCheck && !rep.hasError) {
+          for (name <- nm.keys) {
+            nm = nm + name ~> th.nameMap.get(name).get
+          }
+          for (name <- tm.keys) {
+            tm = tm + name ~> th.typeMap.get(name).get
+          }
+          PostTipeAttrChecker.checkNameTypeMaps(nm, tm, rep)
+        }
       }
       val info3 = info2(messages = rep.messages)
       if (rep.hasError) {
@@ -201,15 +259,6 @@ object LogikaProyek {
       }
       if (checkFileUris.isEmpty) {
         return (info4, changed)
-      }
-      val verifyFileUris: HashSet[String] = if (info.all) {
-        var vfus = HashSet.empty[String]
-        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
-          vfus = vfus + input.fileUriOpt.get
-        }
-        vfus
-      } else {
-        checkFileUris
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -228,7 +277,7 @@ object LogikaProyek {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info4(messages = rep.messages), !rep.hasError)
+      return (info4(messages = rep.messages), shouldProcess && !rep.hasError)
     }
   }
 
@@ -245,6 +294,9 @@ object LogikaProyek {
           followSymLink: B,
           all: B,
           verify: B,
+          disableOutput: B,
+          verbose: B,
+          sanityCheck: B,
           plugins: ISZ[Plugin],
           skipMethods: ISZ[String],
           skipTypes: ISZ[String],
@@ -258,45 +310,67 @@ object LogikaProyek {
       line = line,
       all = all,
       verify = verify,
+      verbose = !disableOutput && verbose,
+      sanityCheck = sanityCheck,
       config = config,
       plugins = plugins,
       skipMethods = skipMethods,
       skipTypes = skipTypes)
 
+    val runModule = (moduleId: String) =>
+      (moduleId, LogikaModuleProcessor(
+        root = root,
+        module = project.modules.get(moduleId).get,
+        par = par,
+        strictAliasing = strictAliasing,
+        followSymLink = followSymLink,
+        outDir = outDir
+      ).run(vi, cache, dm))
+
     var modules = project.poset.rootNodes
-    var seenModules = ISZ[String]()
+    var seenModules = HashSet.empty[String]
+
+    if (!disableOutput && !verbose) {
+      println()
+    }
+
     while (modules.nonEmpty) {
       var nextModules = HashSSet.empty[String]
-      var workModules = ISZ[String]()
+      var workModules = HashSSet.empty[String]
       for (module <- modules) {
-        if ((project.poset.parentsOf(module) -- seenModules).isEmpty) {
-          workModules = workModules :+ module
+        if ((project.poset.parentsOf(module) -- seenModules.elements).isEmpty) {
+          workModules = workModules + module
         } else {
           nextModules = nextModules + module
         }
       }
 
-      def shouldContinue: B = {
-        return (all || vi.files.nonEmpty) && !message.ReporterImpl(vi.messages).hasError
+      seenModules = seenModules ++ workModules.elements
+
+      if (!disableOutput && !verbose) {
+        println(st"${if (vi.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.elements, ", ")} ...".render)
       }
 
-      for (module <- workModules if shouldContinue) {
-        seenModules = seenModules :+ module
-        vi = LogikaModuleProcessor(
-          root = root,
-          module = project.modules.get(module).get,
-          par = par,
-          strictAliasing = strictAliasing,
-          followSymLink = followSymLink,
-          outDir = outDir
-        ).run(vi, cache, dm)
-        thMapBox.value = vi.thMap
-        nextModules = nextModules ++ project.poset.childrenOf(module).elements
+      val mvis: ISZ[(String, VerificationInfo)] =
+        if (par && !verbose) ops.ISZOps(workModules.elements).mParMap(runModule)
+        else for (module <- workModules.elements) yield runModule(module)
+
+      for (pair <- mvis) {
+        val (mid, vi2) = pair
+        thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
+        vi = vi(messages = vi.messages ++ vi2.messages, files = vi.files -- (vi.files.keys -- vi2.files.keys), thMap = thMapBox.value)
       }
-      if (shouldContinue) {
-        modules = nextModules.elements
+
+      if ((all || vi.files.nonEmpty) && !message.ReporterImpl(vi.messages).hasError) {
+        modules = (nextModules ++
+          (for (module <- workModules.elements; childModule <- project.poset.childrenOf(module).elements) yield childModule)).
+          elements
       } else {
         modules = ISZ()
+      }
+
+      if (!disableOutput && !verbose) {
+        println()
       }
     }
     reporter.reports(vi.messages)

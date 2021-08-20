@@ -204,6 +204,8 @@ class LogikaProyekTest extends TestSuite {
         line = 0,
         all = F,
         verify = T,
+        verbose = F,
+        sanityCheck = T,
         config = config,
         plugins = org.sireum.logika.Logika.defaultPlugins,
         skipMethods = ISZ(),

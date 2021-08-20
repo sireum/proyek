@@ -216,7 +216,8 @@ object cli {
         tpe = Type.Flag(F),
         description = "Check all Slang files"
       ),
-      org.sireum.lang.cli.strictAliasingOpt
+      org.sireum.lang.cli.strictAliasingOpt,
+      org.sireum.lang.cli.verboseOpt
     ),
     groups = ISZ(
       projectOptGroup,
@@ -328,7 +329,8 @@ object cli {
     usageDescOpt = None(),
     opts = ISZ(
       parOpt,
-      org.sireum.lang.cli.strictAliasingOpt
+      org.sireum.lang.cli.strictAliasingOpt,
+      org.sireum.lang.cli.verboseOpt
     ),
     groups = ISZ(
       projectOptGroup,
