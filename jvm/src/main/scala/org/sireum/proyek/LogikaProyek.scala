@@ -32,7 +32,7 @@ import org.sireum.lang.{ast => AST}
 import org.sireum.lang.tipe.{PostTipeAttrChecker, TypeChecker, TypeHierarchy, TypeOutliner}
 import org.sireum.logika.plugin.Plugin
 import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
-import org.sireum.message.Message
+import org.sireum.message.{Message, ReporterImpl}
 import org.sireum.project._
 
 object LogikaProyek {
@@ -355,13 +355,20 @@ object LogikaProyek {
         if (par && !verbose) ops.ISZOps(workModules.elements).mParMap(runModule)
         else for (module <- workModules.elements) yield runModule(module)
 
+      var hasError = F
       for (pair <- mvis) {
         val (mid, vi2) = pair
-        thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
+        val rep = ReporterImpl(vi2.messages)
+        if (rep.hasError) {
+          thMapBox.value = thMapBox.value -- (project.poset.descendantsOf(mid).elements :+ mid)
+          hasError = T
+        } else {
+          thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
+        }
         vi = vi(messages = vi.messages ++ vi2.messages, files = vi.files -- (vi.files.keys -- vi2.files.keys), thMap = thMapBox.value)
       }
 
-      if ((all || vi.files.nonEmpty) && !message.ReporterImpl(vi.messages).hasError) {
+      if ((all || vi.files.nonEmpty) && !hasError) {
         modules = (nextModules ++
           (for (module <- workModules.elements; childModule <- project.poset.childrenOf(module).elements) yield childModule)).
           elements
@@ -373,6 +380,11 @@ object LogikaProyek {
         println()
       }
     }
+
+    if (!all && files.nonEmpty && vi.files.isEmpty) {
+      thMapBox.value = thMapBox.value -- (thMapBox.value.keys -- seenModules.elements)
+    }
+    
     reporter.reports(vi.messages)
     return if (reporter.hasError) -1 else 0
   }
