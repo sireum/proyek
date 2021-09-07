@@ -41,7 +41,7 @@ object Compile {
   @record class CompileModuleProcessor(val root: Os.Path,
                                        val module: Module,
                                        val force: B,
-                                       val par: B,
+                                       val par: Z,
                                        val sha3: B,
                                        val followSymLink: B,
                                        val outDir: Os.Path,
@@ -151,7 +151,7 @@ object Compile {
           isJs: B,
           followSymLink: B,
           fresh: B,
-          par: B,
+          par: Z,
           sha3: B,
           ignoreRuntime: B,
           recompileModuleIds: ISZ[String]): Z = {
@@ -253,9 +253,7 @@ object Compile {
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
         ).run((CompileStatus.Compiled, ""), T, dm)
-        val r: ISZ[(CompileStatus.Type, String)] =
-          if (par) ops.ISZOps(nexts).mParMap(compileModule)
-          else for (next <- nexts) yield compileModule(next)
+        val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
         for (p <- r) {
           if (p._1 == CompileStatus.Error) {

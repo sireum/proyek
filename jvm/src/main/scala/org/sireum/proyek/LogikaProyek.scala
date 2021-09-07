@@ -52,7 +52,7 @@ object LogikaProyek {
 
   @record class LogikaModuleProcessor(val root: Os.Path,
                                       val module: Module,
-                                      val par: B,
+                                      val par: Z,
                                       val strictAliasing: B,
                                       val followSymLink: B,
                                       val outDir: Os.Path) extends ModuleProcessor[VerificationInfo, Smt2.Cache] {
@@ -125,10 +125,8 @@ object LogikaProyek {
                 }
               }
               val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
-              val q = ops.ISZOps(
-                if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
-                else inputs.map(FrontEnd.parseGloballyResolve _)).
-                foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
+              val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
+                (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
               (inputs.s, q._3, q._4, info(messages = info.messages ++ q._1), T)
             }
           case _ =>
@@ -167,10 +165,8 @@ object LogikaProyek {
               nm = pair._1
               tm = pair._2
             }
-            val q = ops.ISZOps(
-              if (par) inputs.parMap(FrontEnd.parseGloballyResolve _)
-              else inputs.map(FrontEnd.parseGloballyResolve _)).
-              foldLeft(FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm))
+            val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
+              (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
             nm = q._3
             tm = q._4
             (inputs.s, nm, tm, info(messages = info.messages ++ q._1), T)
@@ -289,7 +285,7 @@ object LogikaProyek {
           cache: Smt2.Cache,
           files: HashSMap[String, String],
           line: Z,
-          par: B,
+          par: Z,
           strictAliasing: B,
           followSymLink: B,
           all: B,
@@ -352,7 +348,7 @@ object LogikaProyek {
       }
 
       val mvis: ISZ[(String, VerificationInfo)] =
-        if (par && !verbose) ops.ISZOps(workModules.elements).mParMap(runModule)
+        if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
       var hasError = F

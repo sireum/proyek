@@ -123,7 +123,7 @@ object LogikaProyekTest {
     val test1Lmp: LogikaModuleProcessor = LogikaModuleProcessor(
       root = root,
       module = project.modules.get(test1.name).get,
-      par = F,
+      par = 1,
       strictAliasing = T,
       followSymLink = F,
       outDir = outDir,
@@ -132,7 +132,7 @@ object LogikaProyekTest {
     val test2Lmp: LogikaModuleProcessor = LogikaModuleProcessor(
       root = root,
       module = project.modules.get(test2.name).get,
-      par = F,
+      par = 1,
       strictAliasing = T,
       followSymLink = F,
       outDir = outDir,

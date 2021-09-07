@@ -91,11 +91,6 @@ object cli {
     )
   )
 
-  val parOpt: Opt = Opt(name = "par", longKey = "par", shortKey = Some('p'),
-    tpe = Type.Flag(F),
-    description = "Enable parallelization"
-  )
-
   val commonCompileOpts: ISZ[Opt] = ISZ(
     Opt(name = "javac", longKey = "javac", shortKey = None(),
       tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options")),
@@ -105,7 +100,7 @@ object cli {
       tpe = Type.Flag(F),
       description = "Fresh compilation from a clean slate"
     ),
-    parOpt,
+    org.sireum.logika.cli.parOpt,
     Opt(name = "recompile", longKey = "recompile", shortKey = None(),
       tpe = Type.Str(Some(','), None()),
       description = "Module IDs to force recompilation on"
@@ -328,7 +323,7 @@ object cli {
     usage = "<options>* <dir>",
     usageDescOpt = None(),
     opts = ISZ(
-      parOpt,
+      org.sireum.logika.cli.parOpt,
       org.sireum.lang.cli.strictAliasingOpt,
       org.sireum.lang.cli.verboseOpt
     ),
