@@ -343,7 +343,11 @@ object Compile {
 
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      val r = proc"$scalac @${argFile.name}".at(argFile.up.canon).run()
+      var env = ISZ[(String, String)]()
+      if (Os.env("JAVA_OPTS").isEmpty) {
+        env = env :+ "JAVA_OPTS" ~> " "
+      }
+      val r = proc"$scalac @${argFile.name}".env(env).at(argFile.up.canon).run()
       ok = r.ok
       sb = sb :+ st"${r.out}"
       sb = sb :+ st"${r.err}"
