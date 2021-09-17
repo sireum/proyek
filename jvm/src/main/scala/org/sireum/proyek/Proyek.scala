@@ -27,8 +27,6 @@
 package org.sireum.proyek
 
 import org.sireum._
-import org.sireum.project.{DependencyManager, Module, ModuleProcessor, Project, ProjectUtil, Target}
-
 
 object Proyek {
 
