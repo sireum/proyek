@@ -39,6 +39,7 @@ object LogikaProyek {
 
   @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
                                    val files: HashSMap[String, String],
+                                   val vfiles: ISZ[String],
                                    val messages: ISZ[Message],
                                    val line: Z,
                                    val all: B,
@@ -187,7 +188,12 @@ object LogikaProyek {
         }
         vfus
       } else {
-        checkFileUris
+        val vfileSet = HashSet ++ info.vfiles
+        var vfus = HashSSet.empty[String]
+        for (p <- checkFilePaths if vfileSet.contains(p)) {
+          vfus = vfus + Os.path(p).toUri
+        }
+        vfus
       }
       if (!rep.hasError) {
         if (info.verify && info.verbose) {
@@ -284,6 +290,7 @@ object LogikaProyek {
           config: Config,
           cache: Smt2.Cache,
           files: HashSMap[String, String],
+          vfiles: ISZ[String],
           line: Z,
           par: Z,
           strictAliasing: B,
@@ -302,6 +309,7 @@ object LogikaProyek {
     var vi = VerificationInfo(
       thMap = thMapBox.value,
       files = files,
+      vfiles = vfiles,
       messages = ISZ(),
       line = line,
       all = all,

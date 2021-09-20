@@ -197,9 +197,11 @@ class LogikaProyekTest extends TestSuite {
       val test2Sources = ISZ(test2Slang)
 
       val config = LogikaTest.config
+      val files = HashSMap.empty + test2Slang.string ~> test2SlangContent
       val vi = proyek.LogikaProyek.VerificationInfo(
         thMap = HashMap.empty,
-        files = HashSMap.empty + test2Slang.string ~> test2SlangContent,
+        files = files,
+        vfiles = files.keys,
         messages = ISZ(),
         line = 0,
         all = F,
