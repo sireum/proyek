@@ -32,7 +32,7 @@ import org.sireum.lang.{ast => AST}
 import org.sireum.lang.tipe.{PostTipeAttrChecker, TypeChecker, TypeHierarchy, TypeOutliner}
 import org.sireum.logika.plugin.Plugin
 import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
-import org.sireum.message.{Message, ReporterImpl}
+import org.sireum.message.Message
 import org.sireum.project._
 
 object LogikaProyek {
@@ -40,7 +40,6 @@ object LogikaProyek {
   @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
                                    val files: HashSMap[String, String],
                                    val vfiles: ISZ[String],
-                                   val messages: ISZ[Message],
                                    val line: Z,
                                    val all: B,
                                    val verify: B,
@@ -81,7 +80,8 @@ object LogikaProyek {
                          shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
-                         testSourceFiles: ISZ[Os.Path]): (VerificationInfo, B) = {
+                         testSourceFiles: ISZ[Os.Path],
+                         reporter: message.Reporter): (VerificationInfo, B) = {
       if (info.verbose) {
         println()
         println(s"Checking ${module.id} ...")
@@ -128,7 +128,8 @@ object LogikaProyek {
               val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
               val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
                 (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
-              (inputs.s, q._3, q._4, info(messages = info.messages ++ q._1), T)
+              reporter.reports(q._1)
+              (inputs.s, q._3, q._4, info, T)
             }
           case _ =>
             if (info.verbose && checkFileUris.nonEmpty) {
@@ -170,10 +171,10 @@ object LogikaProyek {
               (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
             nm = q._3
             tm = q._4
-            (inputs.s, nm, tm, info(messages = info.messages ++ q._1), T)
+            reporter.reports(q._1)
+            (inputs.s, nm, tm, info, T)
         }
-      val rep = Logika.Reporter.create
-      rep.reports(info2.messages)
+      val rep = reporter.asInstanceOf[logika.Logika.Reporter]
       if (rep.hasError || !changed) {
         return (info2, F)
       }
@@ -188,7 +189,7 @@ object LogikaProyek {
         }
         vfus
       } else {
-        val vfileSet = HashSet ++ info.vfiles
+        val vfileSet = HashSet ++ (if (info.vfiles.isEmpty) info.files.keys else info.vfiles)
         var vfus = HashSSet.empty[String]
         for (p <- checkFilePaths if vfileSet.contains(p)) {
           vfus = vfus + Os.path(p).toUri
@@ -247,20 +248,19 @@ object LogikaProyek {
           PostTipeAttrChecker.checkNameTypeMaps(nm, tm, rep)
         }
       }
-      val info3 = info2(messages = rep.messages)
       if (rep.hasError) {
-        return (info3, F)
+        return (info2, F)
       }
       val newFiles = info2.files -- checkFilePaths
-      val info4 = info3(
-        thMap = info3.thMap + module.id ~> th,
+      val info3 = info2(
+        thMap = info2.thMap + module.id ~> th,
         files = newFiles
       )
       if (!info.verify) {
-        return (info4, F)
+        return (info3, F)
       }
       if (checkFileUris.isEmpty) {
-        return (info4, changed)
+        return (info3, changed)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -279,7 +279,7 @@ object LogikaProyek {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info4(messages = rep.messages), shouldProcess && !rep.hasError)
+      return (info3, shouldProcess && !rep.hasError)
     }
   }
 
@@ -310,7 +310,6 @@ object LogikaProyek {
       thMap = thMapBox.value,
       files = files,
       vfiles = vfiles,
-      messages = ISZ(),
       line = line,
       all = all,
       verify = verify,
@@ -329,7 +328,7 @@ object LogikaProyek {
         strictAliasing = strictAliasing,
         followSymLink = followSymLink,
         outDir = outDir
-      ).run(vi, cache, dm))
+      ).run(vi, cache, dm, reporter))
 
     var modules = project.poset.rootNodes
     var seenModules = HashSet.empty[String]
@@ -362,14 +361,13 @@ object LogikaProyek {
       var hasError = F
       for (pair <- mvis) {
         val (mid, vi2) = pair
-        val rep = ReporterImpl(vi2.messages)
-        if (rep.hasError) {
+        if (reporter.hasError) {
           thMapBox.value = thMapBox.value -- (project.poset.descendantsOf(mid).elements :+ mid)
           hasError = T
         } else {
           thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
         }
-        vi = vi(messages = vi.messages ++ vi2.messages, files = vi.files -- (vi.files.keys -- vi2.files.keys), thMap = thMapBox.value)
+        vi = vi(files = vi.files -- (vi.files.keys -- vi2.files.keys), thMap = thMapBox.value)
       }
 
       if ((all || vi.files.nonEmpty) && !hasError) {
@@ -389,7 +387,6 @@ object LogikaProyek {
       thMapBox.value = thMapBox.value -- (thMapBox.value.keys -- seenModules.elements)
     }
     
-    reporter.reports(vi.messages)
     return if (reporter.hasError) -1 else 0
   }
 

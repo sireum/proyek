@@ -65,7 +65,8 @@ object Compile {
                          shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
-                         testSourceFiles: ISZ[Os.Path]): ((CompileStatus.Type, String), B) = {
+                         testSourceFiles: ISZ[Os.Path],
+                         reporter: message.Reporter): ((CompileStatus.Type, String), B) = {
 
       if (!shouldProcess) {
         return ((CompileStatus.Skipped, ""), F)
@@ -252,7 +253,7 @@ object Compile {
           scalacOptions = scalacOptions,
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
-        ).run((CompileStatus.Compiled, ""), T, dm)
+        ).run((CompileStatus.Compiled, ""), T, dm, message.Reporter.create)
         val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
         for (p <- r) {

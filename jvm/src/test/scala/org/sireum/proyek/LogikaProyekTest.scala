@@ -31,8 +31,77 @@ import org.sireum.project._
 import org.sireum.proyek.LogikaProyek.LogikaModuleProcessor
 import org.sireum.test._
 import org.sireum.logika.{LogikaTest, Smt2}
+import org.sireum.message.{Message, Position}
 
 object LogikaProyekTest {
+
+  class ReporterImpl(var _messages: ISZ[Message]) extends logika.Logika.Reporter {
+    var _owned: Boolean = false
+    var _ignore: B = F
+    var isIllFormed: B = F
+
+    override def combine(other: logika.Logika.Reporter): logika.Logika.Reporter = {
+      other match {
+        case other: ReporterImpl =>
+          _messages = _messages ++ other._messages
+          isIllFormed = isIllFormed || other.isIllFormed
+          return this
+      }
+    }
+
+    override def $owned: Boolean = _owned
+
+    override def $owned_=(b: Boolean): ReporterImpl = {
+      _owned = b
+      this
+    }
+
+    override def $clone: ReporterImpl = {
+      val r = new ReporterImpl(_messages)
+      r.isIllFormed = isIllFormed
+      r
+    }
+
+    override def string: String = {
+      return "ReporterImpl"
+    }
+
+    override def illFormed(): Unit = {
+      isIllFormed = T
+    }
+
+    override def state(posOpt: Option[Position], s: logika.State): Unit = {}
+
+    override def inform(pos: Position, kind: org.sireum.logika.Logika.Reporter.Info.Kind.Type, message: String): Unit = {}
+
+    override def query(pos: Position, time: Z, r: logika.Smt2Query.Result): Unit = {}
+
+    override def timing(desc: String, timeInMs: Z): Unit = {}
+
+    override def empty: logika.Logika.Reporter = {
+      return new ReporterImpl(ISZ())
+    }
+
+    override def messages: ISZ[Message] = {
+      return _messages
+    }
+
+    override def ignore: B = {
+      return _ignore
+    }
+
+    override def setIgnore(newIgnore: B): Unit = {
+      _ignore = newIgnore
+    }
+
+    override def setMessages(newMessages: ISZ[Message]): Unit = synchronized {
+      _messages = newMessages
+    }
+
+    override def report(m: Message): Unit = synchronized {
+      super.report(m)
+    }
+  }
 
   val versions: String = $internal.RC.text(Vector("../../../../../../../../versions.properties")) { (_, _) => T }.head._2
 
@@ -202,7 +271,6 @@ class LogikaProyekTest extends TestSuite {
         thMap = HashMap.empty,
         files = files,
         vfiles = files.keys,
-        messages = ISZ(),
         line = 0,
         all = F,
         verify = T,
@@ -215,28 +283,29 @@ class LogikaProyekTest extends TestSuite {
       )
       val cache = Smt2.NoCache()
 
-      val (vi2, r2) = tempProject.test1Lmp.process(vi, cache, T, tempProject.dm, test1Sources, ISZ())
+      val reporter = new ReporterImpl(ISZ())
+      val (vi2, r2) = tempProject.test1Lmp.process(vi, cache, T, tempProject.dm, test1Sources, ISZ(), reporter)
       assert(r2)
-      assert(vi2.messages.isEmpty)
+      assert(reporter.messages.isEmpty)
       assert(vi2.thMap.get("test1").nonEmpty)
       assert(vi2.thMap.get("test2").isEmpty)
 
-      val (vi3, r3) = tempProject.test2Lmp.process(vi2, cache, T, tempProject.dm, test2Sources, ISZ())
+      val (vi3, r3) = tempProject.test2Lmp.process(vi2, cache, T, tempProject.dm, test2Sources, ISZ(), reporter)
       assert(r3)
-      assert(vi3.messages.isEmpty)
+      assert(reporter.messages.isEmpty)
       assert(sysid(vi3.thMap.get("test1").get) == sysid(vi2.thMap.get("test1").get))
       assert(vi3.thMap.get("test2").nonEmpty)
 
       val (vi4, r4) = tempProject.test1Lmp.process(
-        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), cache, F, tempProject.dm, test1Sources, ISZ())
+        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), cache, F, tempProject.dm, test1Sources, ISZ(), reporter)
       assert(!r4)
-      assert(vi4.messages.isEmpty)
+      assert(reporter.messages.isEmpty)
       assert(sysid(vi4.thMap.get("test1").get) == sysid(vi3.thMap.get("test1").get))
       assert(sysid(vi4.thMap.get("test2").get) == sysid(vi3.thMap.get("test2").get))
 
-      val (vi5, r5) = tempProject.test2Lmp.process(vi4, cache, F, tempProject.dm, test2Sources, ISZ())
+      val (vi5, r5) = tempProject.test2Lmp.process(vi4, cache, F, tempProject.dm, test2Sources, ISZ(), reporter)
       assert(!r5)
-      assert(vi5.messages.isEmpty)
+      assert(reporter.messages.isEmpty)
       assert(sysid(vi5.thMap.get("test1").get) == sysid(vi4.thMap.get("test1").get))
       assert(sysid(vi5.thMap.get("test2").get) != sysid(vi4.thMap.get("test2").get))
 
