@@ -98,21 +98,21 @@ object LogikaProyek {
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
-      val checkFileUris = HashSSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
-      val (inputs, nameMap, typeMap, info2, changed): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo, B) =
+      val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo) =
         info.thMap.get(module.id) match {
-          case Some(th) if !info.all && !shouldProcess =>
+          case Some(th) if !info.all =>
             if (checkFilePaths.isEmpty) {
               return (info, F)
             } else {
-              if (info.verbose && checkFileUris.nonEmpty) {
+              if (info.verbose && checkFilePaths.nonEmpty) {
                 println("Parsing and type outlining files:")
-                for (uri <- checkFileUris.elements) {
-                  println(s"* ${Os.uriToPath(uri)}")
+                for (p <- checkFilePaths) {
+                  println(s"* $p")
                 }
               }
               var nm = th.nameMap
               var tm = th.typeMap
+              val checkFileUris = HashSSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
               for (info <- nm.values if info.posOpt.nonEmpty) {
                 info.posOpt.get.uriOpt match {
                   case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
@@ -129,10 +129,10 @@ object LogikaProyek {
               val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
                 (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
               reporter.reports(q._1)
-              (inputs.s, q._3, q._4, info, T)
+              (inputs.s, q._3, q._4, info)
             }
           case _ =>
-            if (info.verbose && checkFileUris.nonEmpty) {
+            if (info.verbose && checkFilePaths.nonEmpty) {
               if (info.verify && !info.all) {
                 println("Parsing and type outlining files:")
                 for (p <- sourceFilePaths) {
@@ -172,15 +172,14 @@ object LogikaProyek {
             nm = q._3
             tm = q._4
             reporter.reports(q._1)
-            (inputs.s, nm, tm, info, T)
+            (inputs.s, nm, tm, info)
         }
-      val rep = reporter.asInstanceOf[logika.Logika.Reporter]
-      if (rep.hasError || !changed) {
+      if (reporter.hasError) {
         return (info2, F)
       }
-      var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), rep)
-      if (!rep.hasError) {
-        th = TypeOutliner.checkOutline(par, strictAliasing, th, rep)
+      var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
+      if (!reporter.hasError) {
+        th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
       val verifyFileUris: HashSSet[String] = if (info.all) {
         var vfus = HashSSet.empty[String]
@@ -196,7 +195,7 @@ object LogikaProyek {
         }
         vfus
       }
-      if (!rep.hasError) {
+      if (!reporter.hasError) {
         if (info.verify && info.verbose) {
           if (info.all) {
             if (verifyFileUris.nonEmpty) {
@@ -237,30 +236,30 @@ object LogikaProyek {
             }
           }
         }
-        th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, rep)
-        if (info.sanityCheck && !rep.hasError) {
+        th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
+        if (reporter.hasError) {
+          return (info2, F)
+        }
+        if (info.sanityCheck) {
           for (name <- nm.keys) {
             nm = nm + name ~> th.nameMap.get(name).get
           }
           for (name <- tm.keys) {
             tm = tm + name ~> th.typeMap.get(name).get
           }
-          PostTipeAttrChecker.checkNameTypeMaps(nm, tm, rep)
+          PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
+          if (reporter.hasError) {
+            return (info2, F)
+          }
         }
-      }
-      if (rep.hasError) {
-        return (info2, F)
       }
       val newFiles = info2.files -- checkFilePaths
       val info3 = info2(
         thMap = info2.thMap + module.id ~> th,
         files = newFiles
       )
-      if (!info.verify) {
-        return (info3, F)
-      }
-      if (checkFileUris.isEmpty) {
-        return (info3, changed)
+      if (!info.verify || verifyFileUris.isEmpty) {
+        return (info3, shouldProcess)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -270,16 +269,16 @@ object LogikaProyek {
         th = th,
         smt2f = (th: TypeHierarchy) =>
           Smt2Impl.create(config.smt2Configs, th, config.timeoutInMs, config.cvc4RLimit, config.charBitWidth,
-            config.intBitWidth, config.useReal, config.simplifiedQuery, rep),
+            config.intBitWidth, config.useReal, config.simplifiedQuery, reporter.asInstanceOf[logika.Logika.Reporter]),
         cache = cache,
-        reporter = rep,
+        reporter = reporter.asInstanceOf[logika.Logika.Reporter],
         par = par,
         plugins = info.plugins,
         line = info.line,
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info3, shouldProcess && !rep.hasError)
+      return (info3, shouldProcess && !reporter.hasError)
     }
   }
 
@@ -358,12 +357,11 @@ object LogikaProyek {
         if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
-      var hasError = F
+      val hasError = reporter.hasError
       for (pair <- mvis) {
         val (mid, vi2) = pair
-        if (reporter.hasError) {
+        if (hasError) {
           thMapBox.value = thMapBox.value -- (project.poset.descendantsOf(mid).elements :+ mid)
-          hasError = T
         } else {
           thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
         }
