@@ -28,12 +28,12 @@ import org.sireum._
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.symbol.Info
 import org.sireum.project._
-import org.sireum.proyek.LogikaProyek.LogikaModuleProcessor
+import org.sireum.proyek.Analysis.ModuleProcessor
 import org.sireum.test._
 import org.sireum.logika.{LogikaTest, Smt2}
 import org.sireum.message.{Message, Position}
 
-object LogikaProyekTest {
+object AnalysisTest {
 
   class ReporterImpl(var _messages: ISZ[Message]) extends logika.Logika.Reporter {
     var _owned: Boolean = false
@@ -189,7 +189,7 @@ object LogikaProyekTest {
       cacheOpt = None(),
     )
 
-    val test1Lmp: LogikaModuleProcessor = LogikaModuleProcessor(
+    val test1Lmp: ModuleProcessor = ModuleProcessor(
       root = root,
       module = project.modules.get(test1.name).get,
       par = 1,
@@ -198,7 +198,7 @@ object LogikaProyekTest {
       outDir = outDir,
     )
 
-    val test2Lmp: LogikaModuleProcessor = LogikaModuleProcessor(
+    val test2Lmp: ModuleProcessor = ModuleProcessor(
       root = root,
       module = project.modules.get(test2.name).get,
       par = 1,
@@ -211,9 +211,9 @@ object LogikaProyekTest {
   def sysid(o: AnyRef): Int = System.identityHashCode(o)
 }
 
-import LogikaProyekTest._
+import AnalysisTest._
 
-class LogikaProyekTest extends TestSuite {
+class AnalysisTest extends TestSuite {
 
   val tests = Tests {
 
@@ -267,7 +267,7 @@ class LogikaProyekTest extends TestSuite {
 
       val config = LogikaTest.config
       val files = HashSMap.empty + test2Slang.string ~> test2SlangContent
-      val vi = proyek.LogikaProyek.VerificationInfo(
+      val vi = proyek.Analysis.Info(
         uriMap = HashMap.empty,
         thMap = HashMap.empty,
         files = files,

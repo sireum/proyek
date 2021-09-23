@@ -35,34 +35,34 @@ import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
 import org.sireum.message.Message
 import org.sireum.project._
 
-object LogikaProyek {
+object Analysis {
 
-  @datatype class VerificationInfo(val uriMap: HashMap[String, HashMap[String, FrontEnd.Input]],
-                                   val thMap: HashMap[String, TypeHierarchy],
-                                   val files: HashSMap[String, String],
-                                   val vfiles: ISZ[String],
-                                   val line: Z,
-                                   val all: B,
-                                   val verify: B,
-                                   val verbose: B,
-                                   val sanityCheck: B,
-                                   val config: Config,
-                                   val plugins: ISZ[Plugin],
-                                   val skipMethods: ISZ[String],
-                                   val skipTypes: ISZ[String])
+  @datatype class Info(val uriMap: HashMap[String, HashMap[String, FrontEnd.Input]],
+                       val thMap: HashMap[String, TypeHierarchy],
+                       val files: HashSMap[String, String],
+                       val vfiles: ISZ[String],
+                       val line: Z,
+                       val all: B,
+                       val verify: B,
+                       val verbose: B,
+                       val sanityCheck: B,
+                       val config: Config,
+                       val plugins: ISZ[Plugin],
+                       val skipMethods: ISZ[String],
+                       val skipTypes: ISZ[String])
 
-  @record class LogikaModuleProcessor(val root: Os.Path,
-                                      val module: Module,
-                                      val par: Z,
-                                      val strictAliasing: B,
-                                      val followSymLink: B,
-                                      val outDir: Os.Path) extends ModuleProcessor[VerificationInfo, Smt2.Cache] {
+  @record class ModuleProcessor(val root: Os.Path,
+                                val module: Module,
+                                val par: Z,
+                                val strictAliasing: B,
+                                val followSymLink: B,
+                                val outDir: Os.Path) extends proyek.ModuleProcessor[Info, Smt2.Cache] {
 
     @strictpure def sha3: B = F
 
     @strictpure def force: B = F
 
-    @pure override def fileFilter(info: VerificationInfo, file: Os.Path): B = {
+    @pure override def fileFilter(info: Info, file: Os.Path): B = {
       val ext = file.ext
       if (ext == "slang") {
         return T
@@ -76,7 +76,7 @@ object LogikaProyek {
       }
     }
 
-    override def toInput(info: VerificationInfo, p: Os.Path): FrontEnd.Input = {
+    override def toInput(info: Info, p: Os.Path): FrontEnd.Input = {
       val uri = p.toUri
       val input: FrontEnd.Input = info.files.get(p.string) match {
         case Some(content) => FrontEnd.Input(content, Some(uri))
@@ -92,13 +92,13 @@ object LogikaProyek {
       }
     }
 
-    override def process(info: VerificationInfo,
+    override def process(info: Info,
                          cache: Smt2.Cache,
                          shouldProcess: B,
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
-                         reporter: message.Reporter): (VerificationInfo, B) = {
+                         reporter: message.Reporter): (Info, B) = {
       if (info.verbose) {
         println()
         println(s"Checking ${module.id} ...")
@@ -111,7 +111,7 @@ object LogikaProyek {
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
 
-      val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo) =
+      val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, Info) =
         info.thMap.get(module.id) match {
           case Some(th) if !info.all && !shouldProcess =>
             if (checkFilePaths.isEmpty) {
@@ -188,7 +188,7 @@ object LogikaProyek {
             (inputs.s, nm, tm, info)
         }
 
-      val info3: VerificationInfo = {
+      val info3: Info = {
         var map = info2.uriMap.get(module.id).getOrElse(HashMap.empty)
         for (input <- inputs) {
           map = map + input.fileUriOpt.get ~> input
@@ -326,7 +326,7 @@ object LogikaProyek {
           reporter: Logika.Reporter): Z = {
 
     val outDir = root / "out" / (if (all && !verify) "tipe" else "logika")
-    var vi = VerificationInfo(
+    var info = Info(
       uriMap = mapBox.value1,
       thMap = mapBox.value2,
       files = files,
@@ -342,14 +342,14 @@ object LogikaProyek {
       skipTypes = skipTypes)
 
     val runModule = (moduleId: String) =>
-      (moduleId, LogikaModuleProcessor(
+      (moduleId, ModuleProcessor(
         root = root,
         module = project.modules.get(moduleId).get,
         par = par,
         strictAliasing = strictAliasing,
         followSymLink = followSymLink,
         outDir = outDir
-      ).run(vi, cache, dm, reporter))
+      ).run(info, cache, dm, reporter))
 
     var modules = project.poset.rootNodes
     var seenModules = HashSet.empty[String]
@@ -372,27 +372,27 @@ object LogikaProyek {
       seenModules = seenModules ++ workModules.elements
 
       if (!disableOutput && !verbose) {
-        println(st"${if (vi.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.elements, ", ")} ...".render)
+        println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.elements, ", ")} ...".render)
       }
 
-      val mvis: ISZ[(String, VerificationInfo)] =
+      val mvis: ISZ[(String, Info)] =
         if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
       val hasError = reporter.hasError
       for (pair <- mvis) {
-        val (mid, vi2) = pair
-        mapBox.value1 = mapBox.value1 + mid ~> vi2.uriMap.get(mid).get
+        val (mid, info2) = pair
+        mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
         if (hasError) {
           mapBox.value2 = mapBox.value2 -- (project.poset.descendantsOf(mid).elements :+ mid)
         } else {
-          mapBox.value2 = mapBox.value2 + mid ~> vi2.thMap.get(mid).get
+          mapBox.value2 = mapBox.value2 + mid ~> info2.thMap.get(mid).get
         }
-        vi = vi(files = vi.files -- (vi.files.keys -- vi2.files.keys))
+        info = info(files = info.files -- (info.files.keys -- info2.files.keys))
       }
-      vi = vi(uriMap = mapBox.value1, thMap = mapBox.value2)
+      info = info(uriMap = mapBox.value1, thMap = mapBox.value2)
 
-      if ((all || vi.files.nonEmpty) && !hasError) {
+      if ((all || info.files.nonEmpty) && !hasError) {
         modules = (nextModules ++
           (for (module <- workModules.elements; childModule <- project.poset.childrenOf(module).elements) yield childModule)).
           elements
@@ -405,10 +405,10 @@ object LogikaProyek {
       }
     }
 
-    if (!all && files.nonEmpty && vi.files.isEmpty) {
+    if (!all && files.nonEmpty && info.files.isEmpty) {
       mapBox.value2 = mapBox.value2 -- (mapBox.value2.keys -- seenModules.elements)
     }
-    
+
     return if (reporter.hasError) -1 else 0
   }
 
