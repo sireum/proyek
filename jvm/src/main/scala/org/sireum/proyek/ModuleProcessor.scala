@@ -27,6 +27,7 @@
 package org.sireum.proyek
 
 import org.sireum._
+import org.sireum.lang.FrontEnd
 import org.sireum.message.Reporter
 import org.sireum.project.{DependencyManager, Module, ProjectUtil}
 
@@ -60,31 +61,32 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
     return if (path.exists) for (p <- Os.Path.walk(path, F, followSymLink, filter)) yield p else ISZ()
   }
 
-  @pure def fingerprint(p: Os.Path): String = {
+  @pure def fingerprint(imm: I, p: Os.Path): String = {
     if (sha3) {
-      val sha = crypto.SHA3.init256
-      sha.update(p.readU8s)
-      return st"${sha.finalise()}".render
+      return st"${toInput(imm, p).fingerprint}".render
     } else {
       return s"${p.lastModified}"
     }
   }
 
+  def toInput(imm: I, p: Os.Path): FrontEnd.Input = {
+    return FrontEnd.Input(p.read, Some(p.toUri))
+  }
+
   def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): I = {
-    var sourceFiles = ISZ[Os.Path]()
-    var testSourceFiles = ISZ[Os.Path]()
+    var sourceInputs = ISZ[Os.Path]()
+    var testSourceInputs = ISZ[Os.Path]()
     for (source <- ProjectUtil.moduleSources(module)) {
-      sourceFiles = sourceFiles ++ findSources(imm, source)
+      sourceInputs = sourceInputs ++ findSources(imm, source)
     }
     for (testSource <- ProjectUtil.moduleTestSources(module)) {
-      testSourceFiles = testSourceFiles ++ findSources(imm, testSource)
+      testSourceInputs = testSourceInputs ++ findSources(imm, testSource)
     }
 
     val fingerprintMap = HashMap.empty[String, String] ++ (
-      if (par > 1 && sha3) ops.ISZOps(sourceFiles ++ testSourceFiles).
-        mParMapCores((p: Os.Path) => (root.relativize(p).string, fingerprint(p)), par)
-      else for (p <- sourceFiles ++ testSourceFiles) yield (root.relativize(p).string, fingerprint(p))
-      )
+      if (par > 1 && sha3) ops.ISZOps(sourceInputs ++ testSourceInputs).
+        mParMapCores((p: Os.Path) => (root.relativize(p).string, fingerprint(imm, p)), par)
+      else for (p <- sourceInputs ++ testSourceInputs) yield (root.relativize(p).string, fingerprint(imm, p)))
 
     val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
     val shouldProcess: B = if (!force && fingerprintCache.exists) {
@@ -98,7 +100,7 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
       fingerprintCache.removeAll()
     }
 
-    val (r, save) = process(imm, mut, shouldProcess, dm, sourceFiles, testSourceFiles, reporter)
+    val (r, save) = process(imm, mut, shouldProcess, dm, sourceInputs, testSourceInputs, reporter)
     if (save) {
       fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
         Json.Printer.printString _).render)

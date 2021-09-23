@@ -37,7 +37,8 @@ import org.sireum.project._
 
 object LogikaProyek {
 
-  @datatype class VerificationInfo(val thMap: HashMap[String, TypeHierarchy],
+  @datatype class VerificationInfo(val uriMap: HashMap[String, HashMap[String, FrontEnd.Input]],
+                                   val thMap: HashMap[String, TypeHierarchy],
                                    val files: HashSMap[String, String],
                                    val vfiles: ISZ[String],
                                    val line: Z,
@@ -61,7 +62,7 @@ object LogikaProyek {
 
     @strictpure def force: B = F
 
-    @pure override def fileFilter(vi: VerificationInfo, file: Os.Path): B = {
+    @pure override def fileFilter(info: VerificationInfo, file: Os.Path): B = {
       val ext = file.ext
       if (ext == "slang") {
         return T
@@ -69,9 +70,25 @@ object LogikaProyek {
       if (ext != "scala") {
         return F
       }
-      vi.files.get(file.string) match {
+      info.files.get(file.string) match {
         case Some(content) => return firstCompactLineOps(conversions.String.toCStream(content)).contains("#Sireum")
         case _ => return firstCompactLineOps(file.readCStream).contains("#Sireum")
+      }
+    }
+
+    override def toInput(info: VerificationInfo, p: Os.Path): FrontEnd.Input = {
+      val uri = p.toUri
+      val input: FrontEnd.Input = info.files.get(p.string) match {
+        case Some(content) => FrontEnd.Input(content, Some(uri))
+        case _ => FrontEnd.Input(p.read, Some(uri))
+      }
+      val map: HashMap[String, FrontEnd.Input] = info.uriMap.get(module.id) match {
+        case Some(v) => v
+        case _ => HashMap.empty
+      }
+      map.get(uri) match {
+        case Some(oldInput) if oldInput.fingerprint == input.fingerprint => return oldInput
+        case _ => return input
       }
     }
 
@@ -86,18 +103,12 @@ object LogikaProyek {
         println()
         println(s"Checking ${module.id} ...")
       }
-      def toInput(p: Os.Path): FrontEnd.Input = {
-        val uri = p.toUri
-        info.files.get(p.string) match {
-          case Some(content) => return FrontEnd.Input(content, Some(uri), 0)
-          case _ => return FrontEnd.Input(p.read, Some(uri), p.lastModified)
-        }
-      }
 
       val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
+
       val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo) =
         info.thMap.get(module.id) match {
           case Some(th) if !info.all =>
@@ -125,9 +136,9 @@ object LogikaProyek {
                   case _ =>
                 }
               }
-              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(Os.path(p)))
-              val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
-                (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
+              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(info, Os.path(p)))
+              val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
+                FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
               reporter.reports(q._1)
               (inputs.s, q._3, q._4, info)
             }
@@ -157,25 +168,33 @@ object LogikaProyek {
               nm = nm ++ mth.nameMap.entries
               tm = tm ++ mth.typeMap.entries
             }
-            val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(p))
+            val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
             if (inputs.s.isEmpty) {
               if (nm.isEmpty && tm.isEmpty) {
-                return (info(thMap = info.thMap + module.id ~> TypeHierarchy.empty), T)
+                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), F)
               }
             } else {
               val pair = Resolver.addBuiltIns(nm, tm)
               nm = pair._1
               tm = pair._2
             }
-            val q = inputs.parMapFoldLeftCores(FrontEnd.parseGloballyResolve _, FrontEnd.combineParseResult _,
-              (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
+            val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
+              FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
             nm = q._3
             tm = q._4
             reporter.reports(q._1)
             (inputs.s, nm, tm, info)
         }
+
+      val info3: VerificationInfo = {
+        var map = info2.uriMap.get(module.id).getOrElse(HashMap.empty)
+        for (input <- inputs) {
+          map = map + input.fileUriOpt.get ~> input
+        }
+        info2(uriMap = info2.uriMap + module.id ~> map)
+      }
       if (reporter.hasError) {
-        return (info2, F)
+        return (info3, F)
       }
       var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
       if (!reporter.hasError) {
@@ -238,7 +257,7 @@ object LogikaProyek {
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
         if (reporter.hasError) {
-          return (info2, F)
+          return (info3, F)
         }
         if (info.sanityCheck) {
           for (name <- nm.keys) {
@@ -249,17 +268,17 @@ object LogikaProyek {
           }
           PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
           if (reporter.hasError) {
-            return (info2, F)
+            return (info3, F)
           }
         }
       }
-      val newFiles = info2.files -- checkFilePaths
-      val info3 = info2(
-        thMap = info2.thMap + module.id ~> th,
+      val newFiles = info3.files -- checkFilePaths
+      val info4 = info3(
+        thMap = info3.thMap + module.id ~> th,
         files = newFiles
       )
       if (!info.verify || verifyFileUris.isEmpty) {
-        return (info3, shouldProcess)
+        return (info4, F)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -278,14 +297,14 @@ object LogikaProyek {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info3, shouldProcess && !reporter.hasError)
+      return (info4, F)
     }
   }
 
   def run(root: Os.Path,
           project: Project,
           dm: DependencyManager,
-          thMapBox: MBox[HashMap[String, TypeHierarchy]],
+          mapBox: MBox2[HashMap[String, HashMap[String, FrontEnd.Input]], HashMap[String, TypeHierarchy]],
           config: Config,
           cache: Smt2.Cache,
           files: HashSMap[String, String],
@@ -306,7 +325,8 @@ object LogikaProyek {
 
     val outDir = root / "out" / "logika"
     var vi = VerificationInfo(
-      thMap = thMapBox.value,
+      uriMap = mapBox.value1,
+      thMap = mapBox.value2,
       files = files,
       vfiles = vfiles,
       line = line,
@@ -360,13 +380,15 @@ object LogikaProyek {
       val hasError = reporter.hasError
       for (pair <- mvis) {
         val (mid, vi2) = pair
+        mapBox.value1 = mapBox.value1 + mid ~> vi2.uriMap.get(mid).get
         if (hasError) {
-          thMapBox.value = thMapBox.value -- (project.poset.descendantsOf(mid).elements :+ mid)
+          mapBox.value2 = mapBox.value2 -- (project.poset.descendantsOf(mid).elements :+ mid)
         } else {
-          thMapBox.value = thMapBox.value + mid ~> vi2.thMap.get(mid).get
+          mapBox.value2 = mapBox.value2 + mid ~> vi2.thMap.get(mid).get
         }
-        vi = vi(files = vi.files -- (vi.files.keys -- vi2.files.keys), thMap = thMapBox.value)
+        vi = vi(files = vi.files -- (vi.files.keys -- vi2.files.keys))
       }
+      vi = vi(uriMap = mapBox.value1, thMap = mapBox.value2)
 
       if ((all || vi.files.nonEmpty) && !hasError) {
         modules = (nextModules ++
@@ -382,7 +404,7 @@ object LogikaProyek {
     }
 
     if (!all && files.nonEmpty && vi.files.isEmpty) {
-      thMapBox.value = thMapBox.value -- (thMapBox.value.keys -- seenModules.elements)
+      mapBox.value2 = mapBox.value2 -- (mapBox.value2.keys -- seenModules.elements)
     }
     
     return if (reporter.hasError) -1 else 0
