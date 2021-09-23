@@ -104,6 +104,8 @@ object LogikaProyek {
         println(s"Checking ${module.id} ...")
       }
 
+      val isTipe = info.all && !info.verify
+
       val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
@@ -111,7 +113,7 @@ object LogikaProyek {
 
       val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, VerificationInfo) =
         info.thMap.get(module.id) match {
-          case Some(th) if !info.all =>
+          case Some(th) if !info.all && !shouldProcess =>
             if (checkFilePaths.isEmpty) {
               return (info, F)
             } else {
@@ -171,7 +173,7 @@ object LogikaProyek {
             val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
             if (inputs.s.isEmpty) {
               if (nm.isEmpty && tm.isEmpty) {
-                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), F)
+                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), !isTipe)
               }
             } else {
               val pair = Resolver.addBuiltIns(nm, tm)
@@ -278,7 +280,7 @@ object LogikaProyek {
         files = newFiles
       )
       if (!info.verify || verifyFileUris.isEmpty) {
-        return (info4, F)
+        return (info4, !isTipe && shouldProcess)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -297,7 +299,7 @@ object LogikaProyek {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info4, F)
+      return (info4, !isTipe && shouldProcess)
     }
   }
 
@@ -323,7 +325,7 @@ object LogikaProyek {
           skipTypes: ISZ[String],
           reporter: Logika.Reporter): Z = {
 
-    val outDir = root / "out" / "logika"
+    val outDir = root / "out" / (if (all && !verify) "tipe" else "logika")
     var vi = VerificationInfo(
       uriMap = mapBox.value1,
       thMap = mapBox.value2,
