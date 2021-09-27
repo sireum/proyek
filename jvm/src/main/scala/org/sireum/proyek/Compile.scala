@@ -66,10 +66,10 @@ object Compile {
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
-                         reporter: message.Reporter): ((CompileStatus.Type, String), B) = {
+                         reporter: message.Reporter): ((CompileStatus.Type, String), B, B) = {
 
       if (!shouldProcess) {
-        return ((CompileStatus.Skipped, ""), F)
+        return ((CompileStatus.Skipped, ""), T, F)
       }
 
       var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
@@ -128,15 +128,15 @@ object Compile {
             outDir = testOutDir
           )
           if (testOk) {
-            return ((CompileStatus.Compiled, s"$mainOut$testOut"), T)
+            return ((CompileStatus.Compiled, s"$mainOut$testOut"), T, T)
           } else {
-            return ((CompileStatus.Error, s"$mainOut$testOut"), F)
+            return ((CompileStatus.Error, s"$mainOut$testOut"), T, F)
           }
         } else {
-          return ((CompileStatus.Compiled, mainOut), T)
+          return ((CompileStatus.Compiled, mainOut), T, T)
         }
       } else {
-        return ((CompileStatus.Error, mainOut), F)
+        return ((CompileStatus.Error, mainOut), T, F)
       }
     }
 
@@ -257,16 +257,16 @@ object Compile {
         val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
         for (p <- r) {
-          if (p._1 == CompileStatus.Error) {
+          if (p._1._1 == CompileStatus.Error) {
             ok = F
           }
-          print(p._2)
+          print(p._1._2)
         }
         if (!ok) {
           return -1
         }
         for (p <- ops.ISZOps(nextIds).zip(r)) {
-          val (mid, (status, _)) = p
+          val (mid, ((status, _), _)) = p
           for (mDep <- project.poset.childrenOf(mid).elements) {
             val compile: B = status == CompileStatus.Compiled
             newModules.get(mDep) match {

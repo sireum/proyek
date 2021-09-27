@@ -98,7 +98,7 @@ object Analysis {
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
-                         reporter: message.Reporter): (Info, B) = {
+                         reporter: message.Reporter): (Info, B, B) = {
       if (info.verbose) {
         println()
         println(s"Checking ${module.id} ...")
@@ -115,7 +115,7 @@ object Analysis {
         info.thMap.get(module.id) match {
           case Some(th) if !info.all && !shouldProcess =>
             if (checkFilePaths.isEmpty) {
-              return (info, F)
+              return (info, T, F)
             } else {
               if (info.verbose && checkFilePaths.nonEmpty) {
                 println("Parsing and type outlining files:")
@@ -173,7 +173,7 @@ object Analysis {
             val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
             if (inputs.s.isEmpty) {
               if (nm.isEmpty && tm.isEmpty) {
-                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), !isTipe)
+                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), T, !isTipe)
               }
             } else {
               val pair = Resolver.addBuiltIns(nm, tm)
@@ -196,7 +196,7 @@ object Analysis {
         info2(uriMap = info2.uriMap + module.id ~> map)
       }
       if (reporter.hasError) {
-        return (info3, F)
+        return (info3, F, F)
       }
       var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
       if (!reporter.hasError) {
@@ -259,7 +259,7 @@ object Analysis {
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
         if (reporter.hasError) {
-          return (info3, F)
+          return (info3, F, F)
         }
         if (info.sanityCheck) {
           for (name <- nm.keys) {
@@ -270,7 +270,7 @@ object Analysis {
           }
           PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
           if (reporter.hasError) {
-            return (info3, F)
+            return (info3, F, F)
           }
         }
       }
@@ -280,7 +280,7 @@ object Analysis {
         files = newFiles
       )
       if (!info.verify || verifyFileUris.isEmpty) {
-        return (info4, !isTipe && shouldProcess)
+        return (info4, T, !isTipe && shouldProcess)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -299,7 +299,7 @@ object Analysis {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info4, !isTipe && shouldProcess)
+      return (info4, T, !isTipe && shouldProcess)
     }
   }
 
@@ -375,24 +375,23 @@ object Analysis {
         println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.elements, ", ")} ...".render)
       }
 
-      val mvis: ISZ[(String, Info)] =
+      val mvis: ISZ[(String, (Info, B))] =
         if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
-      val hasError = reporter.hasError
       for (pair <- mvis) {
-        val (mid, info2) = pair
+        val (mid, (info2, tipe)) = pair
         mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
-        if (hasError) {
-          mapBox.value2 = mapBox.value2 -- (project.poset.descendantsOf(mid).elements :+ mid)
-        } else {
+        if (tipe) {
           mapBox.value2 = mapBox.value2 + mid ~> info2.thMap.get(mid).get
+        } else {
+          mapBox.value2 = mapBox.value2 -- (project.poset.descendantsOf(mid).elements :+ mid)
         }
         info = info(files = info.files -- (info.files.keys -- info2.files.keys))
       }
       info = info(uriMap = mapBox.value1, thMap = mapBox.value2)
 
-      if ((all || info.files.nonEmpty) && !hasError) {
+      if ((all || info.files.nonEmpty) && !reporter.hasError) {
         modules = (nextModules ++
           (for (module <- workModules.elements; childModule <- project.poset.childrenOf(module).elements) yield childModule)).
           elements

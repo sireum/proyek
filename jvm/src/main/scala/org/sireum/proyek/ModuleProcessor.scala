@@ -54,7 +54,7 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
               dm: DependencyManager,
               sourceFiles: ISZ[Os.Path],
               testSourceFiles: ISZ[Os.Path],
-              reporter: Reporter): (I, B)
+              reporter: Reporter): (I, B, B)
 
   def findSources(imm: I, path: Os.Path): ISZ[Os.Path] = {
     val filter = (f: Os.Path) => fileFilter(imm, f)
@@ -73,7 +73,7 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
     return FrontEnd.Input(p.read, Some(p.toUri))
   }
 
-  def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): I = {
+  def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): (I, B) = {
     var sourceInputs = ISZ[Os.Path]()
     var testSourceInputs = ISZ[Os.Path]()
     for (source <- ProjectUtil.moduleSources(module)) {
@@ -100,12 +100,12 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
       fingerprintCache.removeAll()
     }
 
-    val (r, save) = process(imm, mut, shouldProcess, dm, sourceInputs, testSourceInputs, reporter)
+    val (r, tipe, save) = process(imm, mut, shouldProcess, dm, sourceInputs, testSourceInputs, reporter)
     if (save) {
       fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
         Json.Printer.printString _).render)
     }
-    return r
+    return (r, tipe)
   }
 }
 
