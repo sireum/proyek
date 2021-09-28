@@ -238,21 +238,28 @@ object Analysis {
         }
         var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
         var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-        if (info.all) {
+        if (info.all || isTipe) {
           nm = th.nameMap
           tm = th.typeMap
         } else {
-          for (ninfo <- th.nameMap.values if ninfo.posOpt.nonEmpty) {
-            ninfo.posOpt.get.uriOpt match {
+          @pure def shouldInclude(pos: message.Position): B = {
+            pos.uriOpt match {
               case Some(uri) if verifyFileUris.contains(uri) =>
-                nm = nm + ninfo.name ~> ninfo
+                val line = info.line
+                return (line <= 0) || (pos.beginLine <= line && line <= pos.endLine)
+              case _ =>
+            }
+            return F
+          }
+          for (ninfo <- th.nameMap.values) {
+            ninfo.posOpt match {
+              case Some(pos) if shouldInclude(pos) => nm = nm + ninfo.name ~> ninfo
               case _ =>
             }
           }
-          for (tinfo <- th.typeMap.values if tinfo.posOpt.nonEmpty) {
-            tinfo.posOpt.get.uriOpt match {
-              case Some(uri) if verifyFileUris.contains(uri) =>
-                tm = tm + tinfo.name ~> tinfo
+          for (tinfo <- th.typeMap.values) {
+            tinfo.posOpt match {
+              case Some(pos) if shouldInclude(pos) => tm = tm + tinfo.name ~> tinfo
               case _ =>
             }
           }
