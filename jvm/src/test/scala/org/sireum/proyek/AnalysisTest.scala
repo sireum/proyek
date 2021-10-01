@@ -74,7 +74,7 @@ object AnalysisTest {
 
     override def inform(pos: Position, kind: org.sireum.logika.Logika.Reporter.Info.Kind.Type, message: String): Unit = {}
 
-    override def query(pos: Position, time: Z, r: logika.Smt2Query.Result): Unit = {}
+    override def query(pos: Position, title: String, time: Z, r: logika.Smt2Query.Result): Unit = {}
 
     override def timing(desc: String, timeInMs: Z): Unit = {}
 
