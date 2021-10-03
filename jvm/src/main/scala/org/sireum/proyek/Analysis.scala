@@ -37,7 +37,8 @@ import org.sireum.project._
 
 object Analysis {
 
-  @datatype class Info(val uriMap: HashMap[String, HashMap[String, FrontEnd.Input]],
+  @datatype class Info(val cacheInput: B,
+                       val uriMap: HashMap[String, HashMap[String, FrontEnd.Input]],
                        val thMap: HashMap[String, TypeHierarchy],
                        val files: HashSMap[String, String],
                        val vfiles: ISZ[String],
@@ -190,8 +191,11 @@ object Analysis {
 
       val info3: Info = {
         var map = info2.uriMap.get(module.id).getOrElse(HashMap.empty)
-        for (input <- inputs) {
-          map = map + input.fileUriOpt.get ~> input
+        if (info2.cacheInput) {
+          map = map -- (for (uri <- map.keys if !Os.uriToPath(uri).exists) yield uri)
+          for (input <- inputs) {
+            map = map + input.fileUriOpt.get ~> input
+          }
         }
         info2(uriMap = info2.uriMap + module.id ~> map)
       }
@@ -314,6 +318,8 @@ object Analysis {
   def run(root: Os.Path,
           project: Project,
           dm: DependencyManager,
+          cacheInput: B,
+          cacheTypeHierarchy: B,
           mapBox: MBox2[HashMap[String, HashMap[String, FrontEnd.Input]], HashMap[String, TypeHierarchy]],
           config: Config,
           cache: Smt2.Cache,
@@ -335,6 +341,7 @@ object Analysis {
 
     val outDir = root / "out" / (if (all && !verify) "tipe" else "logika")
     var info = Info(
+      cacheInput = cacheInput,
       uriMap = mapBox.value1,
       thMap = mapBox.value2,
       files = files,
@@ -387,6 +394,13 @@ object Analysis {
         if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
+      if (!cacheTypeHierarchy) {
+        val poset = project.poset
+        mapBox.value2 = mapBox.value2 -- (for (m <- workModules.elements;
+             mParent <- poset.parentsOf(m).elements if (poset.childrenOf(mParent) -- seenModules.elements).isEmpty) yield
+          mParent)
+      }
+
       for (pair <- mvis) {
         val (mid, (info2, tipe)) = pair
         mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
@@ -410,6 +424,7 @@ object Analysis {
       if (!disableOutput && !verbose) {
         println()
       }
+
     }
 
     if (!all && files.nonEmpty && info.files.isEmpty) {

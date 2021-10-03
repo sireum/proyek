@@ -268,6 +268,7 @@ class AnalysisTest extends TestSuite {
       val config = LogikaTest.config
       val files = HashSMap.empty + test2Slang.string ~> test2SlangContent
       val vi = proyek.Analysis.Info(
+        cacheInput = F,
         uriMap = HashMap.empty,
         thMap = HashMap.empty,
         files = files,
