@@ -28,6 +28,7 @@ package org.sireum.proyek
 
 import org.sireum._
 import org.sireum.project._
+import org.sireum.proyek.ModuleProcessor.{ProcessResult, RunResult}
 import org.sireum.proyek.Proyek._
 
 object Compile {
@@ -38,19 +39,19 @@ object Compile {
     "Error"
   }
 
-  @record class CompileModuleProcessor(val root: Os.Path,
-                                       val module: Module,
-                                       val force: B,
-                                       val par: Z,
-                                       val sha3: B,
-                                       val followSymLink: B,
-                                       val outDir: Os.Path,
-                                       val javaHome: Os.Path,
-                                       val scalaHome: Os.Path,
-                                       val javacOptions: ISZ[String],
-                                       val scalacOptions: ISZ[String],
-                                       val scalacPlugin: Os.Path,
-                                       val isJs: B) extends ModuleProcessor[(CompileStatus.Type, String), B] {
+  @record class ModuleProcessor(val root: Os.Path,
+                                val module: Module,
+                                val force: B,
+                                val par: Z,
+                                val sha3: B,
+                                val followSymLink: B,
+                                val outDir: Os.Path,
+                                val javaHome: Os.Path,
+                                val scalaHome: Os.Path,
+                                val javacOptions: ISZ[String],
+                                val scalacOptions: ISZ[String],
+                                val scalacPlugin: Os.Path,
+                                val isJs: B) extends proyek.ModuleProcessor[(CompileStatus.Type, String), B] {
 
     @pure override def fileFilter(ignore: (CompileStatus.Type, String), file: Os.Path): B = {
       var r: B = file.ext == "scala"
@@ -63,13 +64,14 @@ object Compile {
     override def process(o: (CompileStatus.Type, String),
                          ignore: B,
                          shouldProcess: B,
+                         changedFiles: HashMap[String, B],
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
-                         reporter: message.Reporter): ((CompileStatus.Type, String), B, B) = {
+                         reporter: message.Reporter): ProcessResult[(CompileStatus.Type, String)] = {
 
       if (!shouldProcess) {
-        return ((CompileStatus.Skipped, ""), T, F)
+        return ProcessResult(imm = (CompileStatus.Skipped, ""), tipeStatus = T, save = F, changed = F)
       }
 
       var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
@@ -128,15 +130,15 @@ object Compile {
             outDir = testOutDir
           )
           if (testOk) {
-            return ((CompileStatus.Compiled, s"$mainOut$testOut"), T, T)
+            return ProcessResult(imm = (CompileStatus.Compiled, s"$mainOut$testOut"), tipeStatus = T, save = T, changed = T)
           } else {
-            return ((CompileStatus.Error, s"$mainOut$testOut"), T, F)
+            return ProcessResult(imm = (CompileStatus.Error, s"$mainOut$testOut"), tipeStatus = T, save = F, changed = T)
           }
         } else {
-          return ((CompileStatus.Compiled, mainOut), T, T)
+          return ProcessResult(imm = (CompileStatus.Compiled, mainOut), tipeStatus = T, save = T, changed = T)
         }
       } else {
-        return ((CompileStatus.Error, mainOut), T, F)
+        return ProcessResult(imm = (CompileStatus.Error, mainOut), tipeStatus = T, save = F, changed = T)
       }
     }
 
@@ -239,7 +241,7 @@ object Compile {
           if (!compileAll && !next._2 && recompileIds.contains(next._1.id)) s"${next._1.id}*"
           else next._1.id
         println(st"Compiling module${if (nextIds.size > 1) "s" else ""}: ${(nextIds, ", ")} ...".render)
-        val compileModule = (pair: (Module, B)) => CompileModuleProcessor(
+        val compileModule = (pair: (Module, B)) => ModuleProcessor(
           root = path,
           module = pair._1,
           force = pair._2 || recompileIds.contains(pair._1.id),
@@ -257,21 +259,20 @@ object Compile {
         val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
         for (p <- r) {
-          if (p._1._1 == CompileStatus.Error) {
+          if (p.imm._1 == CompileStatus.Error) {
             ok = F
           }
-          print(p._1._2)
+          print(p.imm._2)
         }
         if (!ok) {
           return -1
         }
         for (p <- ops.ISZOps(nextIds).zip(r)) {
-          val (mid, ((status, _), _)) = p
+          val (mid, RunResult(_, _, changed)) = p
           for (mDep <- project.poset.childrenOf(mid).elements) {
-            val compile: B = status == CompileStatus.Compiled
             newModules.get(mDep) match {
-              case Some(b) => newModules = newModules + mDep ~> (b | compile)
-              case _ => newModules = newModules + mDep ~> compile
+              case Some(b) => newModules = newModules + mDep ~> (b | changed)
+              case _ => newModules = newModules + mDep ~> changed
             }
           }
         }

@@ -31,6 +31,13 @@ import org.sireum.lang.FrontEnd
 import org.sireum.message.Reporter
 import org.sireum.project.{DependencyManager, Module, ProjectUtil}
 
+object ModuleProcessor {
+  @datatype class ProcessResult[I](imm: I, tipeStatus: B, save: B, changed: B)
+  @datatype class RunResult[I](imm: I, tipeStatus: B, changed: B)
+}
+
+import ModuleProcessor._
+
 @msig trait ModuleProcessor[I, M] {
   @pure def root: Os.Path
 
@@ -51,10 +58,11 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
   def process(imm: I,
               mut: M,
               shouldProcess: B,
+              changedFiles: HashMap[String, B],
               dm: DependencyManager,
               sourceFiles: ISZ[Os.Path],
               testSourceFiles: ISZ[Os.Path],
-              reporter: Reporter): (I, B, B)
+              reporter: Reporter): ProcessResult[I]
 
   def findSources(imm: I, path: Os.Path): ISZ[Os.Path] = {
     val filter = (f: Os.Path) => fileFilter(imm, f)
@@ -73,7 +81,7 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
     return FrontEnd.Input(p.read, Some(p.toUri))
   }
 
-  def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): (I, B) = {
+  def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): RunResult[I] = {
     var sourceInputs = ISZ[Os.Path]()
     var testSourceInputs = ISZ[Os.Path]()
     for (source <- ProjectUtil.moduleSources(module)) {
@@ -89,23 +97,45 @@ import org.sireum.project.{DependencyManager, Module, ProjectUtil}
       else for (p <- sourceInputs ++ testSourceInputs) yield (root.relativize(p).string, fingerprint(imm, p)))
 
     val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
-    val shouldProcess: B = if (!force && fingerprintCache.exists) {
+    val (shouldProcess, changedFiles): (B, HashMap[String, B]) = if (!force && fingerprintCache.exists) {
       val jsonParser = Json.Parser.create(fingerprintCache.read)
       val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
-      if (jsonParser.errorOpt.isEmpty) map != fingerprintMap else T
+      var cfMap = HashMap.empty[String, B]
+      if (jsonParser.errorOpt.isEmpty) {
+        var diff = F
+        for (p <- map.entries) {
+          val k = p._1
+          fingerprintMap.get(k) match {
+            case Some(v) =>
+              if (p._2 != v) {
+                diff = T
+                cfMap = cfMap + k ~> T
+              }
+            case _ =>
+          }
+        }
+        for (k <- fingerprintMap.keys if !map.contains(k)) {
+          diff = T
+          cfMap = cfMap + k ~> F
+        }
+        (diff, cfMap)
+      } else {
+        (T, cfMap)
+      }
     } else {
-      T
+      (T, HashMap.empty)
     }
     if (shouldProcess) {
       fingerprintCache.removeAll()
     }
 
-    val (r, tipe, save) = process(imm, mut, shouldProcess, dm, sourceInputs, testSourceInputs, reporter)
+    val ProcessResult(r, tipe, save, changed) = process(imm, mut, shouldProcess, changedFiles, dm, sourceInputs,
+      testSourceInputs, reporter)
     if (save) {
       fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
         Json.Printer.printString _).render)
     }
-    return (r, tipe)
+    return RunResult(r, tipe, changed)
   }
 }
 

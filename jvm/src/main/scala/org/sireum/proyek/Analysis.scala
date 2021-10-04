@@ -34,6 +34,7 @@ import org.sireum.logika.plugin.Plugin
 import org.sireum.logika.{Config, Logika, Smt2, Smt2Impl}
 import org.sireum.message.Message
 import org.sireum.project._
+import org.sireum.proyek.ModuleProcessor.{ProcessResult, RunResult}
 
 object Analysis {
 
@@ -54,14 +55,13 @@ object Analysis {
 
   @record class ModuleProcessor(val root: Os.Path,
                                 val module: Module,
+                                val force: B,
                                 val par: Z,
                                 val strictAliasing: B,
                                 val followSymLink: B,
                                 val outDir: Os.Path) extends proyek.ModuleProcessor[Info, Smt2.Cache] {
 
     @strictpure def sha3: B = F
-
-    @strictpure def force: B = F
 
     @pure override def fileFilter(info: Info, file: Os.Path): B = {
       val ext = file.ext
@@ -96,10 +96,11 @@ object Analysis {
     override def process(info: Info,
                          cache: Smt2.Cache,
                          shouldProcess: B,
+                         changedFiles: HashMap[String, B],
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
-                         reporter: message.Reporter): (Info, B, B) = {
+                         reporter: message.Reporter): ProcessResult[Info] = {
       if (info.verbose) {
         println()
         println(s"Checking ${module.id} ...")
@@ -114,9 +115,9 @@ object Analysis {
 
       val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, Info) =
         info.thMap.get(module.id) match {
-          case Some(th) if !info.all && !shouldProcess =>
-            if (checkFilePaths.isEmpty) {
-              return (info, T, F)
+          case Some(th) if !info.all && !force =>
+            if (checkFilePaths.isEmpty && changedFiles.isEmpty) {
+              return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F)
             } else {
               if (info.verbose && checkFilePaths.nonEmpty) {
                 println("Parsing and type outlining files:")
@@ -126,7 +127,7 @@ object Analysis {
               }
               var nm = th.nameMap
               var tm = th.typeMap
-              val checkFileUris = HashSSet ++ (for (p <- checkFilePaths) yield Os.path(p).toUri)
+              val checkFileUris = HashSSet ++ (for (p <- checkFilePaths ++ changedFiles.keys) yield Os.path(p).toUri)
               for (info <- nm.values if info.posOpt.nonEmpty) {
                 info.posOpt.get.uriOpt match {
                   case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
@@ -139,7 +140,9 @@ object Analysis {
                   case _ =>
                 }
               }
-              val inputs = ops.ISZOps(for (p <- checkFilePaths) yield toInput(info, Os.path(p)))
+              val inputs = ops.ISZOps(
+                for (p <- checkFilePaths ++ (for (e <- changedFiles.entries if e._2) yield e._1)) yield
+                  toInput(info, Os.path(p)))
               val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
                 FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
               reporter.reports(q._1)
@@ -174,7 +177,8 @@ object Analysis {
             val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
             if (inputs.s.isEmpty) {
               if (nm.isEmpty && tm.isEmpty) {
-                return (info(uriMap = info.uriMap + module.id ~> HashMap.empty, thMap = info.thMap + module.id ~> TypeHierarchy.empty), T, !isTipe)
+                return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
+                  thMap = info.thMap + module.id ~> TypeHierarchy.empty), tipeStatus = T, save = !isTipe, changed = T)
               }
             } else {
               val pair = Resolver.addBuiltIns(nm, tm)
@@ -200,7 +204,7 @@ object Analysis {
         info2(uriMap = info2.uriMap + module.id ~> map)
       }
       if (reporter.hasError) {
-        return (info3, F, F)
+        return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
       }
       var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
       if (!reporter.hasError) {
@@ -270,7 +274,7 @@ object Analysis {
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
         if (reporter.hasError) {
-          return (info3, F, F)
+          return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
         }
         if (info.sanityCheck) {
           for (name <- nm.keys) {
@@ -281,7 +285,7 @@ object Analysis {
           }
           PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
           if (reporter.hasError) {
-            return (info3, F, F)
+            return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
           }
         }
       }
@@ -291,7 +295,7 @@ object Analysis {
         files = newFiles
       )
       if (!info.verify || verifyFileUris.isEmpty) {
-        return (info4, T, !isTipe && shouldProcess)
+        return ProcessResult(imm = info4, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
       }
       val config = info.config
       Logika.checkTypedPrograms(
@@ -311,7 +315,7 @@ object Analysis {
         skipMethods = info.skipMethods,
         skipTypes = info.skipTypes
       )
-      return (info4, T, !isTipe && shouldProcess)
+      return ProcessResult(imm = info4, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
     }
   }
 
@@ -356,17 +360,7 @@ object Analysis {
       skipMethods = skipMethods,
       skipTypes = skipTypes)
 
-    val runModule = (moduleId: String) =>
-      (moduleId, ModuleProcessor(
-        root = root,
-        module = project.modules.get(moduleId).get,
-        par = par,
-        strictAliasing = strictAliasing,
-        followSymLink = followSymLink,
-        outDir = outDir
-      ).run(info, cache, dm, reporter))
-
-    var modules = project.poset.rootNodes
+    var modules: ISZ[(String, B)] = for (m <- project.poset.rootNodes) yield (m, F)
     var seenModules = HashSet.empty[String]
 
     if (!disableOutput && !verbose) {
@@ -374,49 +368,67 @@ object Analysis {
     }
 
     while (modules.nonEmpty) {
-      var nextModules = HashSSet.empty[String]
-      var workModules = HashSSet.empty[String]
-      for (module <- modules) {
+      var nextModules = HashSMap.empty[String, B]
+      var workModules = HashSMap.empty[String, B]
+      for (p <- modules) {
+        val (module, force) = p
         if ((project.poset.parentsOf(module) -- seenModules.elements).isEmpty) {
-          workModules = workModules + module
+          workModules = workModules + module ~> force
         } else {
-          nextModules = nextModules + module
+          nextModules = nextModules + module ~> force
         }
       }
 
-      seenModules = seenModules ++ workModules.elements
+      seenModules = seenModules ++ workModules.keys
 
       if (!disableOutput && !verbose) {
-        println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.elements, ", ")} ...".render)
+        println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.keys, ", ")} ...".render)
       }
 
-      val mvis: ISZ[(String, (Info, B))] =
-        if (par != 1 && !verbose) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
-        else for (module <- workModules.elements) yield runModule(module)
+      val runModule = (p: (String, B)) =>
+        (p._1, ModuleProcessor(
+          root = root,
+          module = project.modules.get(p._1).get,
+          force = p._2,
+          par = par,
+          strictAliasing = strictAliasing,
+          followSymLink = followSymLink,
+          outDir = outDir
+        ).run(info, cache, dm, reporter))
+
+      val mvis: ISZ[(String, RunResult[Info])] =
+        if (par != 1 && !verbose) ops.ISZOps(workModules.entries).mParMapCores(runModule, par)
+        else for (module <- workModules.entries) yield runModule(module)
 
       if (!cacheTypeHierarchy) {
         val poset = project.poset
-        mapBox.value2 = mapBox.value2 -- (for (m <- workModules.elements;
+        mapBox.value2 = mapBox.value2 -- (for (m <- workModules.keys;
              mParent <- poset.parentsOf(m).elements if (poset.childrenOf(mParent) -- seenModules.elements).isEmpty) yield
           mParent)
       }
 
+      var tipe: B = T
       for (pair <- mvis) {
-        val (mid, (info2, tipe)) = pair
+        val (mid, RunResult(info2, t, changed)) = pair
+        workModules = workModules + mid ~> changed
         mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
-        if (tipe) {
+        if (t) {
           mapBox.value2 = mapBox.value2 + mid ~> info2.thMap.get(mid).get
         } else {
-          mapBox.value2 = mapBox.value2 -- (project.poset.descendantsOf(mid).elements :+ mid)
+          tipe = F
         }
         info = info(files = info.files -- (info.files.keys -- info2.files.keys))
       }
       info = info(uriMap = mapBox.value1, thMap = mapBox.value2)
 
-      if ((all || info.files.nonEmpty) && !reporter.hasError) {
-        modules = (nextModules ++
-          (for (module <- workModules.elements; childModule <- project.poset.childrenOf(module).elements) yield childModule)).
-          elements
+      if ((all || info.files.nonEmpty) && tipe && !reporter.hasError) {
+        for (p <- workModules.entries; childModule <- project.poset.childrenOf(p._1).elements) {
+          nextModules.get(childModule) match {
+            case Some(force) => nextModules = nextModules + childModule ~> (force || p._2)
+            case _ => nextModules = nextModules + childModule ~> p._2
+          }
+        }
+        modules = nextModules.entries
       } else {
         modules = ISZ()
       }
