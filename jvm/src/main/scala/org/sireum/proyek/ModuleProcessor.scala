@@ -109,14 +109,14 @@ import ModuleProcessor._
             case Some(v) =>
               if (p._2 != v) {
                 diff = T
-                cfMap = cfMap + k ~> T
+                cfMap = cfMap + (root / k).string ~> T
               }
             case _ =>
           }
         }
         for (k <- fingerprintMap.keys if !map.contains(k)) {
           diff = T
-          cfMap = cfMap + k ~> F
+          cfMap = cfMap + (root / k).string ~> F
         }
         (diff, cfMap)
       } else {
