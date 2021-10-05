@@ -101,6 +101,10 @@ import ModuleProcessor._
       val jsonParser = Json.Parser.create(fingerprintCache.read)
       val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
       var cfMap = HashMap.empty[String, B]
+      @strictpure def toAbs(path: String): String = {
+        val p = Os.path(path)
+        (if (p.isAbs) p else root / path).string
+      }
       if (jsonParser.errorOpt.isEmpty) {
         var diff = F
         for (p <- map.entries) {
@@ -109,14 +113,14 @@ import ModuleProcessor._
             case Some(v) =>
               if (p._2 != v) {
                 diff = T
-                cfMap = cfMap + (root / k).string ~> T
+                cfMap = cfMap + toAbs(k) ~> T
               }
             case _ =>
           }
         }
         for (k <- fingerprintMap.keys if !map.contains(k)) {
           diff = T
-          cfMap = cfMap + (root / k).string ~> F
+          cfMap = cfMap + toAbs(k) ~> F
         }
         (diff, cfMap)
       } else {
