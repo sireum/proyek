@@ -421,15 +421,16 @@ object Analysis {
       }
       info = info(uriMap = mapBox.value1, thMap = mapBox.value2)
 
-      if ((all || info.files.nonEmpty) && tipe && !reporter.hasError) {
-        for (p <- workModules.entries; childModule <- project.poset.childrenOf(p._1).elements) {
-          nextModules.get(childModule) match {
-            case Some(force) => nextModules = nextModules + childModule ~> (force || p._2)
-            case _ => nextModules = nextModules + childModule ~> p._2
-          }
+      for (p <- workModules.entries; childModule <- project.poset.childrenOf(p._1).elements) {
+        nextModules.get(childModule) match {
+          case Some(force) => nextModules = nextModules + childModule ~> (force || p._2)
+          case _ => nextModules = nextModules + childModule ~> p._2
         }
+      }
+      if ((all || info.files.nonEmpty) && tipe && !reporter.hasError) {
         modules = nextModules.entries
       } else {
+        mapBox.value2 = mapBox.value2 -- (for (p <- nextModules.entries if p._2) yield p._1)
         modules = ISZ()
       }
 
