@@ -250,7 +250,7 @@ object Ive {
     IVE.writeScalaSettings(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
-    IVE.writeScriptRunner(dotIdea, projectName)
+    IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
     IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
@@ -665,7 +665,7 @@ object Ive {
       println(s"Wrote $f")
     }
 
-    def writeScriptRunner(dotIdea: Os.Path, name: String): Unit = {
+    def writeScriptRunner(dotIdea: Os.Path, javaHome: Os.Path, name: String): Unit = {
       val runConfigurations = dotIdea / "runConfigurations"
       runConfigurations.mkdirAll()
 
@@ -673,6 +673,9 @@ object Ive {
       f.writeOver(
         st"""<component name="ProjectRunConfigurationManager">
             |  <configuration default="false" name="Slang Script Runner" type="Application" factoryName="Application" singleton="false">
+            |    <envs>
+            |      <env name="JAVA_HOME" value="$javaHome" />
+            |    </envs>
             |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
             |    <module name="$name" />
             |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
