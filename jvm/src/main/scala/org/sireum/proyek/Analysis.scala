@@ -284,10 +284,10 @@ object Analysis {
             tm = tm + name ~> th.typeMap.get(name).get
           }
           PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
-          if (reporter.hasError) {
-            return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
-          }
         }
+      }
+      if (reporter.hasError) {
+        return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
       }
       val newFiles = info3.files -- checkFilePaths
       val info4 = info3(
