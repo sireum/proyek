@@ -113,111 +113,80 @@ object Analysis {
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
 
-      val (inputs, nameMap, typeMap, info2): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap, Info) =
-        info.thMap.get(module.id) match {
-          case Some(th) if !info.all && !force =>
-            if (checkFilePaths.isEmpty && changedFiles.isEmpty) {
-              return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F)
-            } else {
-              if (info.verbose && checkFilePaths.nonEmpty) {
-                println("Parsing and type outlining files:")
-                for (p <- checkFilePaths) {
-                  println(s"* $p")
-                }
-              }
-              var nm = th.nameMap
-              var tm = th.typeMap
-              val checkFileUris = HashSSet ++ (for (p <- checkFilePaths ++ changedFiles.keys) yield Os.path(p).toUri)
-              for (info <- nm.values if info.posOpt.nonEmpty) {
-                info.posOpt.get.uriOpt match {
-                  case Some(uri) if checkFileUris.contains(uri) => nm = nm - ((info.name, info))
-                  case _ =>
-                }
-              }
-              for (info <- tm.values if info.posOpt.nonEmpty) {
-                info.posOpt.get.uriOpt match {
-                  case Some(uri) if checkFileUris.contains(uri) => tm = tm - ((info.name, info))
-                  case _ =>
-                }
-              }
-              val inputs = ops.ISZOps(
-                for (p <- checkFilePaths ++ (for (e <- changedFiles.entries if e._2) yield e._1)) yield
-                  toInput(info, Os.path(p)))
-              val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
-                FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
-              reporter.reports(q._1)
-              (inputs.s, q._3, q._4, info)
-            }
-          case _ =>
-            if (info.verbose && checkFilePaths.nonEmpty) {
-              if (info.verify && !info.all) {
-                println("Parsing and type outlining files:")
-                for (p <- sourceFilePaths) {
-                  println(s"* $p")
-                }
-              } else {
-                println("Parsing, type outlining, and type checking files:")
-                for (p <- sourceFilePaths) {
-                  println(s"* $p")
-                }
-              }
-            }
-            var nm: Resolver.NameMap = HashMap.empty
-            var tm: Resolver.TypeMap = HashMap.empty
-            if ((HashSet ++ module.ivyDeps).contains(DependencyManager.libraryKey)) {
-              val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
-              nm = nm ++ mth.nameMap.entries
-              tm = tm ++ mth.typeMap.entries
-            }
-            for (mid <- dm.project.poset.parentsOf(module.id).elements) {
-              val mth = info.thMap.get(mid).get
-              nm = nm ++ mth.nameMap.entries
-              tm = tm ++ mth.typeMap.entries
-            }
-            val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
-            if (inputs.s.isEmpty) {
-              if (nm.isEmpty && tm.isEmpty) {
-                return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
-                  thMap = info.thMap + module.id ~> TypeHierarchy.empty), tipeStatus = T, save = !isTipe, changed = T)
-              }
-            } else {
-              val pair = Resolver.addBuiltIns(nm, tm)
-              nm = pair._1
-              tm = pair._2
-            }
-            val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
-              FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
-            nm = q._3
-            tm = q._4
-            reporter.reports(q._1)
-            (inputs.s, nm, tm, info)
-        }
+      if (!info.all && !force && checkFilePaths.isEmpty && changedFiles.isEmpty && info.thMap.get(module.id).nonEmpty) {
+        return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F)
+      }
 
-      val info3: Info = {
-        var map = info2.uriMap.get(module.id).getOrElse(HashMap.empty)
-        if (info2.cacheInput) {
+      val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap) = {
+        if (info.verbose && checkFilePaths.nonEmpty) {
+          if (info.verify && !info.all) {
+            println("Parsing and type outlining files:")
+            for (p <- sourceFilePaths) {
+              println(s"* $p")
+            }
+          } else {
+            println("Parsing, type outlining, and type checking files:")
+            for (p <- sourceFilePaths) {
+              println(s"* $p")
+            }
+          }
+        }
+        var nm: Resolver.NameMap = HashMap.empty
+        var tm: Resolver.TypeMap = HashMap.empty
+        if ((HashSet ++ module.ivyDeps).contains(DependencyManager.libraryKey)) {
+          val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
+          nm = nm ++ mth.nameMap.entries
+          tm = tm ++ mth.typeMap.entries
+        }
+        for (mid <- dm.project.poset.parentsOf(module.id).elements) {
+          val mth = info.thMap.get(mid).get
+          nm = nm ++ mth.nameMap.entries
+          tm = tm ++ mth.typeMap.entries
+        }
+        val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
+        if (inputs.s.isEmpty) {
+          if (nm.isEmpty && tm.isEmpty) {
+            return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
+              thMap = info.thMap + module.id ~> TypeHierarchy.empty), tipeStatus = T, save = !isTipe, changed = T)
+          }
+        } else {
+          val pair = Resolver.addBuiltIns(nm, tm)
+          nm = pair._1
+          tm = pair._2
+        }
+        val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
+          FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
+        nm = q._3
+        tm = q._4
+        reporter.reports(q._1)
+        (inputs.s, nm, tm)
+      }
+
+      val info2: Info = {
+        var map = info.uriMap.get(module.id).getOrElse(HashMap.empty)
+        if (info.cacheInput) {
           map = map -- (for (uri <- map.keys if !Os.uriToPath(uri).exists) yield uri)
           for (input <- inputs) {
             map = map + input.fileUriOpt.get ~> input
           }
         }
-        info2(uriMap = info2.uriMap + module.id ~> map)
+        info(uriMap = info.uriMap + module.id ~> map)
       }
       if (reporter.hasError) {
-        return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
       var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
       if (!reporter.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
-      val verifyFileUris: HashSSet[String] = if (info.all) {
+      val verifyFileUris: HashSSet[String] = if (info2.all) {
         var vfus = HashSSet.empty[String]
         for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
           vfus = vfus + input.fileUriOpt.get
         }
         vfus
       } else {
-        val vfileSet = HashSet ++ (if (info.vfiles.isEmpty) info.files.keys else info.vfiles)
+        val vfileSet = HashSet ++ (if (info2.vfiles.isEmpty) info2.files.keys else info2.vfiles)
         var vfus = HashSSet.empty[String]
         for (p <- checkFilePaths if vfileSet.contains(p)) {
           vfus = vfus + Os.path(p).toUri
@@ -225,8 +194,8 @@ object Analysis {
         vfus
       }
       if (!reporter.hasError) {
-        if (info.verify && info.verbose) {
-          if (info.all) {
+        if (info2.verify && info2.verbose) {
+          if (info2.all) {
             if (verifyFileUris.nonEmpty) {
               println()
               println("Verifying files:")
@@ -246,14 +215,14 @@ object Analysis {
         }
         var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
         var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-        if (info.all || isTipe) {
+        if (info2.all || isTipe) {
           nm = th.nameMap
           tm = th.typeMap
         } else {
           @pure def shouldInclude(pos: message.Position): B = {
             pos.uriOpt match {
               case Some(uri) if verifyFileUris.contains(uri) =>
-                val line = info.line
+                val line = info2.line
                 return (line <= 0) || (pos.beginLine <= line && line <= pos.endLine)
               case _ =>
             }
@@ -274,9 +243,9 @@ object Analysis {
         }
         th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
         if (reporter.hasError) {
-          return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
+          return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
         }
-        if (info.sanityCheck) {
+        if (info2.sanityCheck) {
           for (name <- nm.keys) {
             nm = nm + name ~> th.nameMap.get(name).get
           }
@@ -287,17 +256,17 @@ object Analysis {
         }
       }
       if (reporter.hasError) {
-        return ProcessResult(imm = info3, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
-      val newFiles = info3.files -- checkFilePaths
-      val info4 = info3(
-        thMap = info3.thMap + module.id ~> th,
+      val newFiles = info2.files -- checkFilePaths
+      val info3 = info2(
+        thMap = info2.thMap + module.id ~> th,
         files = newFiles
       )
-      if (!info.verify || verifyFileUris.isEmpty) {
-        return ProcessResult(imm = info4, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
+      if (!info3.verify || verifyFileUris.isEmpty) {
+        return ProcessResult(imm = info3, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
       }
-      val config = info.config
+      val config = info3.config
       Logika.checkTypedPrograms(
         verifyingStartTime = 0,
         fileSet = verifyFileUris,
@@ -310,12 +279,12 @@ object Analysis {
         cache = cache,
         reporter = reporter.asInstanceOf[logika.Logika.Reporter],
         par = par,
-        plugins = info.plugins,
-        line = info.line,
-        skipMethods = info.skipMethods,
-        skipTypes = info.skipTypes
+        plugins = info3.plugins,
+        line = info3.line,
+        skipMethods = info3.skipMethods,
+        skipTypes = info3.skipTypes
       )
-      return ProcessResult(imm = info4, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
+      return ProcessResult(imm = info3, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
     }
   }
 
