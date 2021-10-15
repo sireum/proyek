@@ -37,13 +37,14 @@ object Stats {
 
   object Info {
     @strictpure def create: Info = Info(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0)
+      0, 0, 0, 0, 0)
   }
 
   @datatype class Info(val numOfFiles: Z,
                        val numOfLines: Z,
                        val numOfStmts: Z,
                        val numOfExps: Z,
+                       val numOfPatterns: Z,
                        val numOfSubZs: Z,
                        val numOfEnums: Z,
                        val numOfSigs: Z,
@@ -77,6 +78,7 @@ object Stats {
       numOfLines = numOfLines + other.numOfLines,
       numOfStmts = numOfStmts + other.numOfStmts,
       numOfExps = numOfExps + other.numOfExps,
+      numOfPatterns = numOfPatterns + other.numOfPatterns,
       numOfSubZs = numOfSubZs + other.numOfSubZs,
       numOfEnums = numOfEnums + other.numOfEnums,
       numOfSigs = numOfSigs + other.numOfSigs,
@@ -182,6 +184,11 @@ object Stats {
 
     override def postExp(o: AST.Exp): MOption[AST.Exp] = {
       info = info(numOfExps = info.numOfExps + 1)
+      return MNone()
+    }
+
+    override def postPattern(o: AST.Pattern): MOption[AST.Pattern] = {
+      info = info(numOfPatterns = info.numOfPatterns + 1)
       return MNone()
     }
 
@@ -357,12 +364,12 @@ object Stats {
     }
     @strictpure def combine(info1: Info, info2: Info): Info = info1.combine(info2)
     @strictpure def info2ST(title: String, info: Info): ST = {
-      if (info.numOfFiles === 0) st"$title,0,-,-,-,-,-,-"
-      else st"$title,${info.numOfFiles},${info.numOfLines},${info.numOfTypes},${info.numOfFields},${info.numOfMethods},${info.numOfStmts},${info.numOfExps}"
+      if (info.numOfFiles === 0) st"$title,0,-,-,-,-,-,-,-"
+      else st"$title,${info.numOfFiles},${info.numOfLines},${info.numOfTypes},${info.numOfFields},${info.numOfMethods},${info.numOfStmts},${info.numOfExps},${info.numOfPatterns}"
     }
 
     output.writeOver(
-      st"""${(ISZ[String]("Module", "Slang Files", "Lines", "Types", "Fields", "Methods", "Statements", "Expressions"), ",")}
+      st"""${(ISZ[String]("Module", "Slang Files", "Lines", "Types", "Fields", "Methods", "Statements", "Expressions", "Patterns"), ",")}
           |${(for (p <- infoMap.entries) yield info2ST(p._1, p._2), "\n")}
           |${(info2ST(s"Total: ${infoMap.size}", ops.ISZOps(infoMap.values).foldLeft(combine _, Info.create)), ",")}""".render)
     println(s"Wrote $output")
