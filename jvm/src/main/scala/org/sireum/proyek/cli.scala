@@ -279,6 +279,21 @@ object cli {
   )
 
 
+  val statsTool: Tool = Tool(
+    name = "stats",
+    command = "stats",
+    description = "Proyek statistics reporter",
+    header = "Sireum Proyek Statistics Reporter",
+    usage = "<options>* <dir> [ <file.csv> ]",
+    usageDescOpt = None(),
+    opts = ISZ(),
+    groups = ISZ(
+      projectOptGroup,
+      ivyOptGroup
+    )
+  )
+
+
   val testTool: Tool = Tool(
     name = "test",
     command = "test",
@@ -339,7 +354,8 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, testTool, tipeProyekTool)
+    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, statsTool, testTool,
+      tipeProyekTool)
   )
 
 }

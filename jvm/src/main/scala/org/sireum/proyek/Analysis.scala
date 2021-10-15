@@ -72,8 +72,8 @@ object Analysis {
         return F
       }
       info.files.get(file.string) match {
-        case Some(content) => return firstCompactLineOps(conversions.String.toCStream(content)).contains("#Sireum")
-        case _ => return firstCompactLineOps(file.readCStream).contains("#Sireum")
+        case Some(content) => return Proyek.firstCompactLineOps(conversions.String.toCStream(content)).contains("#Sireum")
+        case _ => return Proyek.firstCompactLineOps(file.readCStream).contains("#Sireum")
       }
     }
 
@@ -181,7 +181,7 @@ object Analysis {
       }
       val verifyFileUris: HashSSet[String] = if (info2.all) {
         var vfus = HashSSet.empty[String]
-        for (input <- inputs if firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
+        for (input <- inputs if Proyek.firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
           vfus = vfus + input.fileUriOpt.get
         }
         vfus
@@ -413,15 +413,13 @@ object Analysis {
       mapBox.value2 = mapBox.value2 -- (mapBox.value2.keys -- seenModules.elements)
     }
 
-    return if (reporter.hasError) -1 else 0
-  }
-
-  @pure def firstCompactLineOps(cs: Jen[C]): ops.StringOps = {
-    var cis = ISZ[C]()
-    for (c <- cs.takeWhile((c: C) => c != '\n') if !c.isWhitespace) {
-      cis = cis :+ c
+    if (reporter.hasError) {
+      println()
+      reporter.printMessages()
+      return -1
+    } else {
+      return 0
     }
-    return ops.StringOps(conversions.String.fromCis(cis))
   }
 
 }

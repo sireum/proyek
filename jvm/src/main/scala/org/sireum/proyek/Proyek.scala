@@ -202,4 +202,12 @@ object Proyek {
 
     return Some(props)
   }
+
+  @pure def firstCompactLineOps(cs: Jen[C]): ops.StringOps = {
+    var cis = ISZ[C]()
+    for (c <- cs.takeWhile((c: C) => c != '\n') if !c.isWhitespace) {
+      cis = cis :+ c
+    }
+    return ops.StringOps(conversions.String.fromCis(cis))
+  }
 }
