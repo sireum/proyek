@@ -108,7 +108,7 @@ object Analysis {
 
       val isTipe = info.all && !info.verify
 
-      val sourceFilePaths: ISZ[String] = for (p <- sourceFiles ++ testSourceFiles) yield p.string
+      val sourceFilePaths: ISZ[String] = for (p <- (HashSSet ++ sourceFiles ++ testSourceFiles).elements) yield p.string
       val checkFilePaths: ISZ[String] =
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
@@ -137,22 +137,20 @@ object Analysis {
           val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
           nm = nm ++ mth.nameMap.entries
           tm = tm ++ mth.typeMap.entries
+        } else {
+          val pair = Resolver.addBuiltIns(nm, tm)
+          nm = pair._1
+          tm = pair._2
         }
         for (mid <- dm.project.poset.parentsOf(module.id).elements) {
           val mth = info.thMap.get(mid).get
           nm = nm ++ mth.nameMap.entries
           tm = tm ++ mth.typeMap.entries
         }
-        val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(info, p))
+        val inputs = ops.ISZOps(for (p <- sourceFilePaths) yield toInput(info, Os.path(p)))
         if (inputs.s.isEmpty) {
-          if (nm.isEmpty && tm.isEmpty) {
-            return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
-              thMap = info.thMap + module.id ~> TypeHierarchy.empty), tipeStatus = T, save = !isTipe, changed = T)
-          }
-        } else {
-          val pair = Resolver.addBuiltIns(nm, tm)
-          nm = pair._1
-          tm = pair._2
+          return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
+            thMap = info.thMap + module.id ~> TypeHierarchy.empty(nameMap = nm, typeMap = tm)), tipeStatus = T, save = !isTipe, changed = T)
         }
         val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
           FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
@@ -414,8 +412,6 @@ object Analysis {
     }
 
     if (reporter.hasError) {
-      println()
-      reporter.printMessages()
       return -1
     } else {
       return 0
