@@ -37,7 +37,7 @@ object Stats {
 
   object Info {
     @strictpure def create: Info = Info(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0)
+      0, 0, 0, 0, 0, 0, 0, 0, 0)
   }
 
   @datatype class Info(val numOfFiles: Z,
@@ -71,7 +71,11 @@ object Stats {
                        val numOfExtMethods: Z,
                        val numOfExtSpecMethods: Z,
                        val numOfExtInvs: Z,
-                       val numOfTypeAliases: Z) {
+                       val numOfTypeAliases: Z,
+                       val numOfScalaFiles: Z,
+                       val numOfScalaLines: Z,
+                       val numOfJavaFiles: Z,
+                       val numOfJavaLines: Z) {
 
     @strictpure def combine(other: Info): Info = Info(
       numOfFiles = numOfFiles + other.numOfFiles,
@@ -105,7 +109,11 @@ object Stats {
       numOfExtMethods = numOfExtMethods + other.numOfExtMethods,
       numOfExtSpecMethods = numOfExtSpecMethods + other.numOfExtSpecMethods,
       numOfExtInvs = numOfExtInvs + other.numOfExtInvs,
-      numOfTypeAliases = numOfTypeAliases + other.numOfTypeAliases)
+      numOfTypeAliases = numOfTypeAliases + other.numOfTypeAliases,
+      numOfScalaFiles = numOfScalaFiles + other.numOfScalaFiles,
+      numOfScalaLines = numOfScalaLines + other.numOfScalaLines,
+      numOfJavaFiles = numOfJavaFiles + other.numOfJavaFiles,
+      numOfJavaLines = numOfJavaLines + other.numOfJavaLines)
 
     @strictpure def numOfTypes: Z = numOfSubZs + numOfEnums + numOfSigs + numOfMSigs + numOfDatatypeTraits +
       numOfDatatypeClasses + numOfRecordTraits + numOfRecordClasses + numOfObjects + numOfExts + numOfTypeAliases
@@ -210,13 +218,7 @@ object Stats {
 
     @pure override def fileFilter(infoMap: HashSMap[String, Info], file: Os.Path): B = {
       val ext = file.ext
-      if (ext == "slang") {
-        return T
-      }
-      if (ext != "scala") {
-        return F
-      }
-      return Proyek.firstCompactLineOps(file.readCStream).contains("#Sireum")
+      return ext == "scala" || ext == "java" || ext == "slang"
     }
 
     override def process(infoMap: HashSMap[String, Info],
@@ -227,8 +229,23 @@ object Stats {
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
                          reporter: message.Reporter): ProcessResult[HashSMap[String, Info]] = {
+      var javaFiles = ISZ[Os.Path]()
+      var scalaFiles = ISZ[Os.Path]()
+      var slangFiles = ISZ[Os.Path]()
+      for (p <- (HashSSet ++ sourceFiles ++ testSourceFiles).elements if p.isFile) {
+        p.ext match {
+          case string"scala" =>
+            if (Proyek.firstCompactLineOps(p.readCStream).contains("#Sireum")) {
+              slangFiles = slangFiles :+ p
+            } else {
+              scalaFiles = scalaFiles :+ p
+            }
+          case string"slang" => slangFiles = slangFiles :+ p
+          case string"java" => javaFiles = javaFiles :+ p
+        }
+      }
       val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], NameMap, TypeMap) = {
-        val inputs = ops.ISZOps(for (p <- sourceFiles ++ testSourceFiles) yield toInput(infoMap, p))
+        val inputs = ops.ISZOps(for (p <- slangFiles) yield toInput(infoMap, p))
         var nm: NameMap = HashMap.empty
         var tm: TypeMap = HashMap.empty
         val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
@@ -244,8 +261,17 @@ object Stats {
         return ProcessResult(imm = infoMap, tipeStatus = F, save = F, changed = T)
       }
       sc.info = sc.info(numOfFiles = inputs.size)
+      @strictpure def numOfLines(content: String): Z = ops.StringOps(content).split((c: C) => c === '\n').size
       for (input <- inputs) {
-        sc.info = sc.info(numOfLines = sc.info.numOfLines + ops.StringOps(input.content).split((c: C) => c === '\n').size)
+        sc.info = sc.info(numOfLines = sc.info.numOfLines + numOfLines(input.content))
+      }
+      for (p <- javaFiles) {
+        sc.info = sc.info(numOfJavaFiles = sc.info.numOfJavaFiles + 1,
+          numOfJavaLines = sc.info.numOfJavaLines + numOfLines(p.read))
+      }
+      for (p <- scalaFiles) {
+        sc.info = sc.info(numOfScalaFiles = sc.info.numOfScalaFiles + 1,
+          numOfScalaLines = sc.info.numOfScalaLines + numOfLines(p.read))
       }
       for (info <- nameMap.values) {
         info match {
@@ -363,15 +389,17 @@ object Stats {
       return -1
     }
     @strictpure def combine(info1: Info, info2: Info): Info = info1.combine(info2)
-    @strictpure def info2ST(title: String, info: Info): ST = {
-      if (info.numOfFiles === 0) st"$title,0,-,-,-,-,-,-,-"
-      else st"$title,${info.numOfFiles},${info.numOfLines},${info.numOfTypes},${info.numOfFields},${info.numOfMethods},${info.numOfStmts},${info.numOfExps},${info.numOfPatterns}"
+    @pure def info2ST(title: String, info: Info): ST = {
+      val slangST: ST = if (info.numOfFiles === 0) st"0,-,-,-,-,-,-,-"
+      else st"${info.numOfFiles},${info.numOfLines},${info.numOfTypes},${info.numOfFields},${info.numOfMethods},${info.numOfStmts},${info.numOfExps},${info.numOfPatterns}"
+      val scalaST: ST = if (info.numOfScalaFiles === 0) st"0,-" else st"${info.numOfScalaFiles},${info.numOfScalaLines}"
+      val javaST: ST = if (info.numOfJavaFiles === 0) st"0,-" else st"${info.numOfJavaFiles},${info.numOfJavaLines}"
+      return st"$title,$slangST,$scalaST,$javaST,${info.numOfFiles + info.numOfScalaFiles + info.numOfJavaFiles},${info.numOfLines + info.numOfScalaLines + info.numOfJavaLines}"
     }
-
     output.writeOver(
-      st"""${(ISZ[String]("Module", "Slang Files", "Lines", "Types", "Fields", "Methods", "Statements", "Expressions", "Patterns"), ",")}
+      st"""${(ISZ[String]("Module", "Slang Files", "Lines", "Types", "Fields", "Methods", "Statements", "Expressions", "Patterns", "Scala Files", "Lines", "Java Files", "Lines", "Total Files", "Lines"), ",")}
           |${(for (p <- infoMap.entries) yield info2ST(p._1, p._2), "\n")}
-          |${(info2ST(s"Total: ${infoMap.size}", ops.ISZOps(infoMap.values).foldLeft(combine _, Info.create)), ",")}""".render)
+          |${(info2ST(s"Total: ${infoMap.size} module${if (infoMap.size > 1) "s" else ""}", ops.ISZOps(infoMap.values).foldLeft(combine _, Info.create)), ",")}""".render)
     println(s"Wrote $output")
     return 0
   }
