@@ -101,11 +101,6 @@ object Analysis {
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
                          reporter: message.Reporter): ProcessResult[Info] = {
-      if (info.verbose) {
-        println()
-        println(s"Checking ${module.id} ...")
-      }
-
       val isTipe = info.all && !info.verify
 
       val sourceFilePaths: ISZ[String] = for (p <- (HashSSet ++ sourceFiles ++ testSourceFiles).elements) yield p.string
@@ -118,17 +113,16 @@ object Analysis {
       }
 
       val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap) = {
-        if (info.verbose && checkFilePaths.nonEmpty) {
-          if (info.verify && !info.all) {
-            println("Parsing and type outlining files:")
-            for (p <- sourceFilePaths) {
-              println(s"* $p")
-            }
+        if (info.verbose && sourceFilePaths.nonEmpty) {
+          if (info.verify) {
+            println(
+              st"""Parsing and type outlining files:
+                  |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render
+            )
           } else {
-            println("Parsing, type outlining, and type checking files:")
-            for (p <- sourceFilePaths) {
-              println(s"* $p")
-            }
+            println(
+              st"""Parsing, type outlining, and type checking files:
+                  |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render)
           }
         }
         var nm: Resolver.NameMap = HashMap.empty
@@ -192,24 +186,10 @@ object Analysis {
         vfus
       }
       if (!reporter.hasError) {
-        if (info2.verify && info2.verbose) {
-          if (info2.all) {
-            if (verifyFileUris.nonEmpty) {
-              println()
-              println("Verifying files:")
-              for (uri <- verifyFileUris.elements) {
-                println(s"* ${Os.uriToPath(uri)}")
-              }
-            }
-          } else {
-            if (verifyFileUris.nonEmpty) {
-              println()
-              println("Type checking and verifying files:")
-              for (uri <- verifyFileUris.elements) {
-                println(s"* ${Os.uriToPath(uri)}")
-              }
-            }
-          }
+        if (info2.verify && info2.verbose && verifyFileUris.nonEmpty) {
+          println(
+            st"""Type checking and verifying files:
+                |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
         }
         var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
         var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
@@ -330,7 +310,7 @@ object Analysis {
     var modules: ISZ[(String, B)] = for (m <- project.poset.rootNodes) yield (m, F)
     var seenModules = HashSet.empty[String]
 
-    if (!disableOutput && !verbose) {
+    if (!disableOutput) {
       println()
     }
 
@@ -348,7 +328,7 @@ object Analysis {
 
       seenModules = seenModules ++ workModules.keys
 
-      if (!disableOutput && !verbose) {
+      if (!disableOutput) {
         println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.keys, ", ")} ...".render)
       }
 
@@ -364,7 +344,7 @@ object Analysis {
         ).run(info, cache, dm, reporter))
 
       val mvis: ISZ[(String, RunResult[Info])] =
-        if (par != 1 && !verbose) ops.ISZOps(workModules.entries).mParMapCores(runModule, par)
+        if (par != 1) ops.ISZOps(workModules.entries).mParMapCores(runModule, par)
         else for (module <- workModules.entries) yield runModule(module)
 
       if (!cacheTypeHierarchy) {
@@ -401,7 +381,7 @@ object Analysis {
         modules = ISZ()
       }
 
-      if (!disableOutput && !verbose) {
+      if (!disableOutput) {
         println()
       }
 
