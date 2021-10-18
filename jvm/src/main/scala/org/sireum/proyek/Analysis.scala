@@ -171,7 +171,7 @@ object Analysis {
       if (!reporter.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
-      val verifyFileUris: HashSSet[String] = if (info2.all) {
+      val verifyFileUris: HashSSet[String] = if (info2.all && info2.verify) {
         var vfus = HashSSet.empty[String]
         for (input <- inputs if Proyek.firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
           vfus = vfus + input.fileUriOpt.get
