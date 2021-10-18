@@ -200,10 +200,7 @@ object Analysis {
       }
       var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
       var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-      if (info2.all || isTipe) {
-        nm = th.nameMap
-        tm = th.typeMap
-      } else {
+      if (info2.verify && verifyFileUris.nonEmpty) {
         @pure def shouldInclude(pos: message.Position): B = {
           pos.uriOpt match {
             case Some(uri) if verifyFileUris.contains(uri) =>
@@ -226,6 +223,9 @@ object Analysis {
             case _ =>
           }
         }
+      } else {
+        nm = th.nameMap
+        tm = th.typeMap
       }
       th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
       if (reporter.hasError) {
