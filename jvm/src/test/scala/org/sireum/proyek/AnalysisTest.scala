@@ -197,6 +197,7 @@ object AnalysisTest {
       par = 1,
       strictAliasing = T,
       followSymLink = F,
+      verbose = F,
       outDir = outDir,
     )
 
@@ -207,6 +208,7 @@ object AnalysisTest {
       par = 1,
       strictAliasing = T,
       followSymLink = F,
+      verbose = F,
       outDir = outDir,
     )
   }

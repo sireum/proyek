@@ -59,6 +59,7 @@ object Analysis {
                                 val par: Z,
                                 val strictAliasing: B,
                                 val followSymLink: B,
+                                val verbose: B,
                                 val outDir: Os.Path) extends proyek.ModuleProcessor[Info, Smt2.Cache] {
 
     @strictpure def sha3: B = F
@@ -88,7 +89,11 @@ object Analysis {
         case _ => HashMap.empty
       }
       map.get(uri) match {
-        case Some(oldInput) if oldInput.fingerprint == input.fingerprint => return oldInput
+        case Some(oldInput) if oldInput.fingerprint == input.fingerprint =>
+          if (verbose) {
+            println(s"* Cache hit on parsed input $p")
+          }
+          return oldInput
         case _ => return input
       }
     }
@@ -244,7 +249,7 @@ object Analysis {
         files = newFiles
       )
       if (verifyFileUris.isEmpty) {
-        return ProcessResult(imm = info3, tipeStatus = T, save = T, changed = T)
+        return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
       }
       val config = info3.config
       Logika.checkTypedPrograms(
@@ -264,7 +269,7 @@ object Analysis {
         skipMethods = info3.skipMethods,
         skipTypes = info3.skipTypes
       )
-      return ProcessResult(imm = info3, tipeStatus = T, save = T, changed = T)
+      return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
     }
   }
 
@@ -342,6 +347,7 @@ object Analysis {
           par = par,
           strictAliasing = strictAliasing,
           followSymLink = followSymLink,
+          verbose = verbose,
           outDir = outDir
         ).run(info, cache, dm, reporter))
 
