@@ -178,71 +178,73 @@ object Analysis {
         }
         vfus
       } else {
-        val vfileSet = HashSet ++ (if (info2.vfiles.isEmpty) info2.files.keys else info2.vfiles)
+        val vfileSet = HashSet ++ (for (f <- info2.vfiles) yield Os.path(f).toUri)
         var vfus = HashSSet.empty[String]
-        for (p <- checkFilePaths if vfileSet.contains(p)) {
-          vfus = vfus + Os.path(p).toUri
+        for (input <- inputs if vfileSet.contains(input.fileUriOpt.get)) {
+          vfus = vfus + input.fileUriOpt.get
         }
         vfus
       }
-      if (!reporter.hasError) {
-        if (info2.verify && info2.verbose && verifyFileUris.nonEmpty) {
-          println(
-            st"""Type checking and verifying files:
-                |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
+      if (reporter.hasError) {
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+      }
+      if (info2.verify && info2.verbose && verifyFileUris.nonEmpty) {
+        println(
+          st"""Type checking and verifying files:
+              |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
+      }
+      var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
+      var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
+      if (info2.all || isTipe) {
+        nm = th.nameMap
+        tm = th.typeMap
+      } else {
+        @pure def shouldInclude(pos: message.Position): B = {
+          pos.uriOpt match {
+            case Some(uri) if verifyFileUris.contains(uri) =>
+              val line = info2.line
+              return (line <= 0) || (pos.beginLine <= line && line <= pos.endLine)
+            case _ =>
+          }
+          return F
         }
-        var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
-        var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
-        if (info2.all || isTipe) {
-          nm = th.nameMap
-          tm = th.typeMap
-        } else {
-          @pure def shouldInclude(pos: message.Position): B = {
-            pos.uriOpt match {
-              case Some(uri) if verifyFileUris.contains(uri) =>
-                val line = info2.line
-                return (line <= 0) || (pos.beginLine <= line && line <= pos.endLine)
-              case _ =>
-            }
-            return F
-          }
-          for (ninfo <- th.nameMap.values) {
-            ninfo.posOpt match {
-              case Some(pos) if shouldInclude(pos) => nm = nm + ninfo.name ~> ninfo
-              case _ =>
-            }
-          }
-          for (tinfo <- th.typeMap.values) {
-            tinfo.posOpt match {
-              case Some(pos) if shouldInclude(pos) => tm = tm + tinfo.name ~> tinfo
-              case _ =>
-            }
+
+        for (ninfo <- th.nameMap.values) {
+          ninfo.posOpt match {
+            case Some(pos) if shouldInclude(pos) => nm = nm + ninfo.name ~> ninfo
+            case _ =>
           }
         }
-        th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
+        for (tinfo <- th.typeMap.values) {
+          tinfo.posOpt match {
+            case Some(pos) if shouldInclude(pos) => tm = tm + tinfo.name ~> tinfo
+            case _ =>
+          }
+        }
+      }
+      th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
+      if (reporter.hasError) {
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+      }
+      if (info2.sanityCheck) {
+        for (name <- nm.keys) {
+          nm = nm + name ~> th.nameMap.get(name).get
+        }
+        for (name <- tm.keys) {
+          tm = tm + name ~> th.typeMap.get(name).get
+        }
+        PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
         if (reporter.hasError) {
           return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
         }
-        if (info2.sanityCheck) {
-          for (name <- nm.keys) {
-            nm = nm + name ~> th.nameMap.get(name).get
-          }
-          for (name <- tm.keys) {
-            tm = tm + name ~> th.typeMap.get(name).get
-          }
-          PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
-        }
-      }
-      if (reporter.hasError) {
-        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
       val newFiles = info2.files -- checkFilePaths
       val info3 = info2(
         thMap = info2.thMap + module.id ~> th,
         files = newFiles
       )
-      if (!info3.verify || verifyFileUris.isEmpty) {
-        return ProcessResult(imm = info3, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
+      if (verifyFileUris.isEmpty) {
+        return ProcessResult(imm = info3, tipeStatus = T, save = T, changed = T)
       }
       val config = info3.config
       Logika.checkTypedPrograms(
@@ -262,7 +264,7 @@ object Analysis {
         skipMethods = info3.skipMethods,
         skipTypes = info3.skipTypes
       )
-      return ProcessResult(imm = info3, tipeStatus = T, save = !isTipe && shouldProcess, changed = T)
+      return ProcessResult(imm = info3, tipeStatus = T, save = T, changed = T)
     }
   }
 
@@ -350,7 +352,7 @@ object Analysis {
       if (!cacheTypeHierarchy) {
         val poset = project.poset
         mapBox.value2 = mapBox.value2 -- (for (m <- workModules.keys;
-             mParent <- poset.parentsOf(m).elements if (poset.childrenOf(mParent) -- seenModules.elements).isEmpty) yield
+                                               mParent <- poset.parentsOf(m).elements if (poset.childrenOf(mParent) -- seenModules.elements).isEmpty) yield
           mParent)
       }
 
