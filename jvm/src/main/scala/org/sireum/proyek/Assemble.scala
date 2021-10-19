@@ -122,7 +122,7 @@ object Assemble {
       val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String]("--initialize-at-build-time", "--no-fallback",
         "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
         "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https",
-        "-jar", jar.string, (dir / jarName).string)).console.run()
+        "-jar", jar.string, (dir / jarName).string)).run()
       return r.exitCode
     }
 
