@@ -46,7 +46,8 @@ object Test {
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
 
-    var testClasspath = ISZ[String]()
+    val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
+    var testClasspath = ISZ(scalaLib)
 
     for (m <- project.modules.values) {
       val mTestDir = projectOutDir / m.id / testOutDirName
@@ -64,8 +65,6 @@ object Test {
       testClasspath = testClasspath ++ (for (r <- ProjectUtil.moduleResources(m) ++ ProjectUtil.moduleTestResources(m)) yield r.string)
     }
 
-    testClasspath = testClasspath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
-
     for (lib <- dm.libMap.values) {
       testClasspath = testClasspath :+ lib.main
     }
@@ -75,7 +74,7 @@ object Test {
     ) yield cif.path.string
 
     var args = javaOptions ++ ISZ[String](
-      "-classpath", st"${(classpath, Os.pathSep)}".render,
+      "-classpath", st"${(scalaLib +: classpath, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
       "-R",
