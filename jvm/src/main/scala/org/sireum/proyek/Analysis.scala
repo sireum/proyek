@@ -132,11 +132,21 @@ object Analysis {
         }
         var nm: Resolver.NameMap = HashMap.empty
         var tm: Resolver.TypeMap = HashMap.empty
-        if ((HashSet ++ module.ivyDeps).contains(DependencyManager.libraryKey)) {
+        val ivyDeps = HashSet ++ module.ivyDeps
+        var addBuiltIns = T
+        if (ivyDeps.contains(DependencyManager.librarySharedKey)) {
+          val (mnm, mtm) = FrontEnd.checkedSharedMaps
+          nm = nm ++ mnm.entries
+          tm = tm ++ mtm.entries
+          addBuiltIns = F
+        }
+        if (ivyDeps.contains(DependencyManager.libraryKey)) {
           val mth = FrontEnd.checkedLibraryReporter._1.typeHierarchy
           nm = nm ++ mth.nameMap.entries
           tm = tm ++ mth.typeMap.entries
-        } else {
+          addBuiltIns = F
+        }
+        if (addBuiltIns) {
           val pair = Resolver.addBuiltIns(nm, tm)
           nm = pair._1
           tm = pair._2

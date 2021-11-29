@@ -192,14 +192,17 @@ object Proyek {
       }
     }
 
-    var useRuntimeLibrary = F
-    for (m <- prj.modules.values; ivyDep <- m.ivyDeps if ivyDep == DependencyManager.libraryKey) {
-      useRuntimeLibrary = T
+    var delProps = ISZ(DependencyManager.macrosKey, DependencyManager.testKey, DependencyManager.librarySharedKey, DependencyManager.libraryKey)
+    for (m <- prj.modules.values; ivyDep <- m.ivyDeps) {
+      ivyDep match {
+        case DependencyManager.macrosKey => delProps = delProps - DependencyManager.macrosKey
+        case DependencyManager.testKey => delProps = delProps - DependencyManager.testKey
+        case DependencyManager.librarySharedKey => delProps = delProps - DependencyManager.librarySharedKey
+        case DependencyManager.libraryKey => delProps = delProps - DependencyManager.libraryKey
+        case _ =>
+      }
     }
-    if (!useRuntimeLibrary) {
-      props = props -- ISZ(DependencyManager.libraryKey)
-    }
-
+    props = props -- delProps
     return Some(props)
   }
 
