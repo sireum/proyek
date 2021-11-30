@@ -95,6 +95,7 @@ object Compile {
       mainOutDir.removeAll()
       mainOutDir.mkdirAll()
       val (mainOk, mainOut) = runCompilers(
+        isJs = isJs,
         mid = module.id,
         category = "main",
         javaHome = javaHome,
@@ -119,6 +120,7 @@ object Compile {
           testOutDir.mkdirAll()
 
           val (testOk, testOut) = runCompilers(
+            isJs = isJs,
             mid = module.id,
             category = "test",
             javaHome = javaHome,
@@ -285,7 +287,8 @@ object Compile {
     return 0
   }
 
-  def runCompilers(mid: String,
+  def runCompilers(isJs: B,
+                   mid: String,
                    category: String,
                    javaHome: Os.Path,
                    scalaHome: Os.Path,
@@ -346,6 +349,9 @@ object Compile {
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
       var env = ISZ[(String, String)]()
+      if (isJs) {
+        env = env :+ (("PROYEK_JS", "true"))
+      }
       if (Os.env("JAVA_OPTS").isEmpty) {
         env = env :+ "JAVA_OPTS" ~> " "
       }
