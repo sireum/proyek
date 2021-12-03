@@ -116,6 +116,10 @@ object Assemble {
 
       println()
       println("Building native ...")
+      val tempJar = Os.temp()
+      jar.copyOverTo(tempJar)
+      tempJar.removeOnExit()
+      Asm.eraseNonNative(jar)
       val platDir = homeBin / platformKind
       val dir = jar.up.canon
       val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
@@ -123,6 +127,7 @@ object Assemble {
         "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
         "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https",
         "-jar", jar.string, (dir / jarName).string)).run()
+      tempJar.copyOverTo(jar)
       return r.exitCode
     }
 
