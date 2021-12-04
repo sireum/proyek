@@ -129,7 +129,9 @@ object Assemble {
         "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
       if (r.exitCode =!= 0) {
-        println(r.out)
+        eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
+        eprintln(r.out)
+        eprintln(r.err)
       }
       return r.exitCode
     }
