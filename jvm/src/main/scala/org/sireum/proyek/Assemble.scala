@@ -125,9 +125,12 @@ object Assemble {
       val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
       val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String]("--initialize-at-build-time", "--no-fallback",
         "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
-        "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https",
-        "-jar", jar.string, (dir / jarName).string)).run()
+        "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https", "--allow-incomplete-classpath",
+        "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
+      if (r.exitCode =!= 0) {
+        println(r.out)
+      }
       return r.exitCode
     }
 
