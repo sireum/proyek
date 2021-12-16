@@ -284,6 +284,7 @@ object Analysis {
   }
 
   def run(root: Os.Path,
+          outDirName: String,
           project: Project,
           dm: DependencyManager,
           cacheInput: B,
@@ -307,7 +308,7 @@ object Analysis {
           skipTypes: ISZ[String],
           reporter: Logika.Reporter): Z = {
 
-    val outDir = root / "out" / (if (all && !verify) "tipe" else "logika")
+    val outDir = root / outDirName / (if (all && !verify) "tipe" else "logika")
     var info = Info(
       cacheInput = cacheInput,
       uriMap = mapBox.value1,
