@@ -39,6 +39,7 @@ object Ive {
           jbrVersion: String,
           ideaDir: Os.Path,
           isUltimate: B,
+          isServer: B,
           isDev: B,
           force: B): Z = {
 
@@ -252,7 +253,7 @@ object Ive {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
-    IVE.writeApplicationConfigs(force, ideaDir, isUltimate, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeApplicationConfigs(force, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -279,15 +280,18 @@ object Ive {
           |</component>"""
 
     def writeApplicationConfigs(force: B,
+                                path: Os.Path,
                                 ideaDir: Os.Path,
                                 isUltimate: B,
+                                isServer: B,
                                 javaHome: Os.Path,
                                 javaVersion: String,
                                 jbrVersion: String,
                                 devSuffix: String): Unit = {
       val ult: String = if (isUltimate) "-ult" else ""
       val configOptions: Os.Path =
-        if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
+        if (isServer) Os.home / ".config" / "JetBrains" / "RemoteDev-IU" / ops.StringOps(path.string).replaceAllChars('/', '_') / "options"
+        else if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
         else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
       val configColors = (configOptions.up / "colors").canon
       configOptions.mkdirAll()

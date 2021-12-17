@@ -186,9 +186,9 @@ object cli {
         tpe = Type.Flag(F),
         description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
       ),
-      Opt(name = "ultimate", longKey = "ultimate", shortKey = Some('u'),
-        tpe = Type.Flag(F),
-        description = "Use IntelliJ Ultimate edition"
+      Opt(name = "edition", longKey = "edition", shortKey = Some('e'),
+        tpe = Type.Choice("edition", None(), ISZ("community", "ultimate", "server")),
+        description = "IntelliJ edition (auto-detected if there is only one installed)"
       )
     ),
     groups = ISZ(
