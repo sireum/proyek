@@ -182,6 +182,10 @@ object cli {
     usage = "<options>* <dir>",
     usageDescOpt = None(),
     opts = ISZ(
+      Opt(name = "empty", longKey = "empty", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Create an empty project definition"
+      ),
       Opt(name = "force", longKey = "force", shortKey = Some('f'),
         tpe = Type.Flag(F),
         description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
