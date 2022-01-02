@@ -213,4 +213,14 @@ object Proyek {
     }
     return ops.StringOps(conversions.String.fromCis(cis))
   }
+
+  @pure def hasScalaSource(project: org.sireum.project.Project): B = {
+    for (m <- project.modules.values;
+         src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m);
+         _ <- Os.Path.walk(src, F, F, (p: Os.Path) => p.ext === "scala")) {
+      return T
+    }
+    return F
+  }
+
 }

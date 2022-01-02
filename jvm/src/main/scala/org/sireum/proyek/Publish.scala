@@ -62,13 +62,16 @@ object Publish {
       val mOutDir = projectOutDir / m.id
 
       val org = st"${(orgName, ".")}".render
-      val module = s"${m.id}${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}"
+      val hasScalaSource = Proyek.hasScalaSource(project)
+      val module: String = if (hasScalaSource) s"${m.id}${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}" else m.id
 
       val pom: String = {
         var deps = ISZ[ST]()
 
         for (mDep <- m.deps) {
-          deps = deps :+ PomTemplate.dep(org, s"$mDep${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}", version)
+          deps = deps :+ PomTemplate.dep(org,
+            if (hasScalaSource) s"$mDep${if (isJs) dm.sjsSuffix else ""}_${dm.scalaMajorVersion}" else mDep,
+            version)
         }
 
         for (lib <- dm.fetchDiffLibs(m)) {

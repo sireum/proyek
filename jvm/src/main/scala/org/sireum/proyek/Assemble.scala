@@ -70,16 +70,7 @@ object Assemble {
     val metaDir = contentDir / metaInf
     metaDir.mkdirAll()
 
-    @pure def hasScalaSource: B = {
-      for (m <- project.modules.values;
-           src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m);
-           _ <- Os.Path.walk(src, F, F, (p: Os.Path) => p.ext === "scala")) {
-        return T
-      }
-      return F
-    }
-
-    if (hasScalaSource) {
+    if (Proyek.hasScalaSource(project)) {
       (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
       Asm.rewriteReleaseFence(contentDir)
     }
