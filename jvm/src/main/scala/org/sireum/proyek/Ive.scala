@@ -253,7 +253,7 @@ object Ive {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
-    IVE.writeApplicationConfigs(force, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "" else "-dev")
+    IVE.writeApplicationConfigs(force, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "-dev" else "")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -292,7 +292,7 @@ object Ive {
       val configOptions: Os.Path =
         if (isServer) Os.home / ".config" / "JetBrains" / "RemoteDev-IU" / ops.StringOps(path.string).replaceAllChars('/', '_') / "options"
         else if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
-        else Os.home / s".SireumIVE$devSuffix" / "config" / "options"
+        else Os.home / s".SireumIVE$ult$devSuffix" / "config" / "options"
       val configColors = (configOptions.up / "colors").canon
       configOptions.mkdirAll()
       configColors.mkdirAll()
