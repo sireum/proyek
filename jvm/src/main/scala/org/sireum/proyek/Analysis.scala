@@ -410,6 +410,10 @@ object Analysis {
       mapBox.value2 = mapBox.value2 -- (mapBox.value2.keys -- seenModules.elements)
     }
 
+    if (info.files.nonEmpty && !reporter.hasError) {
+      reporter.warn(None(), "Proyek", st"The project configuration does not include ${(files.keys, ", ")} in the source path(s)".render)
+    }
+
     if (reporter.hasError) {
       return -1
     } else {
