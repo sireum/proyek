@@ -64,7 +64,7 @@ object Run {
 
     val javaArgs = javaOptions ++
       ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
-      args
+      (for (arg <- args) yield s"\"$arg\"")
     val argFile = proyekDir / "java-run-args"
     argFile.writeOver(
       st"${(javaArgs, "\n")}".render)
