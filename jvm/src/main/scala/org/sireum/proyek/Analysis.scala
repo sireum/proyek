@@ -269,7 +269,7 @@ object Analysis {
         th = th,
         smt2f = (th: TypeHierarchy) =>
           Smt2Impl.create(config.smt2Configs, th, config.timeoutInMs, config.cvcRLimit, config.fpRoundingMode,
-            config.charBitWidth, config.intBitWidth, config.useReal, config.simplifiedQuery,
+            config.charBitWidth, config.intBitWidth, config.useReal, config.simplifiedQuery, config.smt2Seq,
             reporter.asInstanceOf[logika.Logika.Reporter]),
         cache = cache,
         reporter = reporter.asInstanceOf[logika.Logika.Reporter],
