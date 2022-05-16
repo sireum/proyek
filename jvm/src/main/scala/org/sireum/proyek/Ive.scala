@@ -56,7 +56,7 @@ object Ive {
         val javadocOpt: Option[ST] = lib.javadocOpt match {
           case Some(p) => Some(
             st"""<JAVADOC>
-                |  <root url="jar://$$USER_HOME$$/${relUri(Os.home, Os.path(p))}!/" />
+                |  <root url="jar://${Os.path(p).canon}!/" />
                 |</JAVADOC>"""
           )
           case _ => None()
@@ -64,7 +64,7 @@ object Ive {
         val sourcesOpt: Option[ST] = lib.sourcesOpt match {
           case Some(p) => Some(
             st"""<SOURCES>
-                |  <root url="jar://$$USER_HOME$$/${relUri(Os.home, Os.path(p))}!/" />
+                |  <root url="jar://${Os.path(p).canon}!/" />
                 |</SOURCES>"""
           )
           case _ => None()
@@ -73,7 +73,7 @@ object Ive {
           st"""<component name="libraryTable">
               |  <library name="${lib.name}">
               |    <CLASSES>
-              |      <root url="jar://$$USER_HOME$$/${relUri(Os.home, Os.path(lib.main))}!/" />
+              |      <root url="jar://${Os.path(lib.main).canon}!/" />
               |    </CLASSES>
               |    $javadocOpt
               |    $sourcesOpt
@@ -94,7 +94,7 @@ object Ive {
           st"""<component name="libraryTable">
               |  <library name="Sireum">
               |    <CLASSES>
-              |      <root url="jar://$$USER_HOME$$/${relUri(Os.home, dm.sireumJar)}!/" />
+              |      <root url="jar://${dm.sireumJar}!/" />
               |    </CLASSES>
               |    <JAVADOC />
               |    <SOURCES />
@@ -106,9 +106,9 @@ object Ive {
       }
 
       {
-        val scalaLibrary = relUri(Os.home, dm.scalaHome / "lib" / "scala-library.jar")
-        val scalaCompiler = relUri(Os.home, dm.scalaHome / "lib" / "scala-compiler.jar")
-        val scalaReflect = relUri(Os.home, dm.scalaHome / "lib" / "scala-reflect.jar")
+        val scalaLibrary = (dm.scalaHome / "lib" / "scala-library.jar").canon
+        val scalaCompiler = (dm.scalaHome / "lib" / "scala-compiler.jar").canon
+        val scalaReflect = (dm.scalaHome / "lib" / "scala-reflect.jar").canon
 
         val f = ideaLib / "Scala.xml"
         f.writeOver(
@@ -117,14 +117,14 @@ object Ive {
               |    <properties>
               |      <language-level>Scala_2_13</language-level>
               |      <compiler-classpath>
-              |        <root url="file://$$USER_HOME$$/$scalaLibrary" />
-              |        <root url="file://$$USER_HOME$$/$scalaCompiler" />
-              |        <root url="file://$$USER_HOME$$/$scalaReflect" />
+              |        <root url="file://$scalaLibrary" />
+              |        <root url="file://$scalaCompiler" />
+              |        <root url="file://$scalaReflect" />
               |      </compiler-classpath>
               |    </properties>
               |    <CLASSES>
-              |      <root url="jar://$$USER_HOME$$/$scalaLibrary!/" />
-              |      <root url="jar://$$USER_HOME$$/$scalaReflect!/" />
+              |      <root url="jar://$scalaLibrary!/" />
+              |      <root url="jar://$scalaReflect!/" />
               |    </CLASSES>
               |    <JAVADOC>
               |      <root url="https://www.scala-lang.org/api/${dm.scalaVersion}/" />
@@ -247,7 +247,7 @@ object Ive {
     IVE.writeMisc(dotIdea, outDirName)
     IVE.writeCodeStyles(dotIdea)
     IVE.writeCompiler(dotIdea)
-    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, dm.sireumJar)
+    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin)
     IVE.writeScalaSettings(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
@@ -631,9 +631,9 @@ object Ive {
       println(s"Wrote $f")
     }
 
-    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path, sireumJar: Os.Path): Unit = {
+    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
       val f = dotIdea / "scala_compiler.xml"
-      val scalacPluginPath = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(scalacPlugin)}"
+      val scalacPluginPath = s"$scalacPlugin"
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
@@ -707,14 +707,13 @@ object Ive {
 
     def writeWorkspace(dotIdea: Os.Path, sireumHome: Os.Path): Unit = {
       val f = dotIdea / "workspace.xml"
-      val slangRun = sireumHome / "bin" / (if (Os.isWin) "slang-run.bat" else "slang-run.sh")
-      val slangRunLoc = s"$$USER_HOME$$${Os.fileSep}${Os.home.relativize(slangRun)}"
+      val slangRun = (sireumHome / "bin" / (if (Os.isWin) "slang-run.bat" else "slang-run.sh")).canon
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
             |  <component name="RunManager">
             |    <configuration default="true" type="ScalaAmmoniteRunConfigurationType" factoryName="Ammonite" singleton="false">
-            |      <setting name="execName" value="$slangRunLoc" />
+            |      <setting name="execName" value="$slangRun" />
             |      <setting name="fileName" value="" />
             |      <setting name="scriptParameters" value="" />
             |      <method v="2" />
