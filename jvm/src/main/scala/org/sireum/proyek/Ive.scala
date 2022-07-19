@@ -482,6 +482,7 @@ object Ive {
         fileTypesXml.writeOver(
           st"""<application>
               |  <component name="FileTypeManager" version="18">
+              |    <ignoreFiles list=".settings;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc" />
               |    <extensionMap>
               |      <mapping ext="cmd" type="Scala Worksheet" />
               |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
