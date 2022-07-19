@@ -372,7 +372,7 @@ object Ive {
               |        </javadocPath>
               |      </roots>
               |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="$$USER_HOME$$${Os.fileSep}.SireumIVE$devSuffix-sandbox" />
+              |        <option name="mySandboxHome" value="${if (isLocal) (sireumHome / ".settings").string else "$USER_HOME$"}${Os.fileSep}.SireumIVE$devSuffix-sandbox" />
               |      </additional>
               |    </jdk>"""
 
@@ -402,7 +402,7 @@ object Ive {
               |        </javadocPath>
               |      </roots>
               |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="$$USER_HOME$$/.SireumIVE$devSuffix-sandbox" />
+              |        <option name="mySandboxHome" value="${if (isLocal) (sireumHome / ".settings").string else "$USER_HOME$"}/.SireumIVE$devSuffix-sandbox" />
               |      </additional>
               |    </jdk>"""
 
