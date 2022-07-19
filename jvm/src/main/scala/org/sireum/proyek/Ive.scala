@@ -31,7 +31,8 @@ import org.sireum.proyek.Proyek._
 
 object Ive {
 
-  def run(path: Os.Path,
+  def run(sireumHome: Os.Path,
+          path: Os.Path,
           project: Project,
           projectName: String,
           dm: DependencyManager,
@@ -253,7 +254,8 @@ object Ive {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
-    IVE.writeApplicationConfigs(force, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion, jbrVersion, if (isDev) "-dev" else "")
+    IVE.writeApplicationConfigs(force, sireumHome, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion,
+      jbrVersion, if (isDev) "-dev" else "")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -280,6 +282,7 @@ object Ive {
           |</component>"""
 
     def writeApplicationConfigs(force: B,
+                                sireumHome: Os.Path,
                                 path: Os.Path,
                                 ideaDir: Os.Path,
                                 isUltimate: B,
@@ -289,8 +292,10 @@ object Ive {
                                 jbrVersion: String,
                                 devSuffix: String): Unit = {
       val ult: String = if (isUltimate) "-ult" else ""
+      val isLocal: B = ops.StringOps(sireumHome.canon.string).startsWith(Os.home.string) && (sireumHome / "bin" / "distro.cmd").exists
       val configOptions: Os.Path =
         if (isServer) Os.home / ".config" / "JetBrains" / "RemoteDev-IU" / ops.StringOps(path.string).replaceAllChars('/', '_') / "options"
+        else if (isLocal) sireumHome / ".settings" / s".SireumIVE$ult$devSuffix" / "config" / "options"
         else if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
         else Os.home / s".SireumIVE$ult$devSuffix" / "config" / "options"
       val configColors = (configOptions.up / "colors").canon
