@@ -302,9 +302,11 @@ object Compile {
       return (T, "")
     }
 
+    val scalaLib = scalaHome / "lib" / "scala-library.jar"
     var scalaArgs = ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render)
     scalaArgs = scalaArgs :+ "-d" :+ outDir.string
-    var javaArgs = scalaArgs
+    var javaArgs = ISZ[String]("-classpath", st"${(scalaLib +: classpath, Os.pathSep)}".render)
+    javaArgs = javaArgs :+ "-d" :+ outDir.string
 
     var ok = T
     var sb = ISZ[ST]()
