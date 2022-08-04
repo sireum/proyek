@@ -46,35 +46,29 @@ object Test {
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
 
-    val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
-    var testClasspath = ISZ(scalaLib)
+    var testClasspath = ISZ[String]()
 
-    for (m <- project.modules.values) {
-      val mTestDir = projectOutDir / m.id / testOutDirName
-      if (mTestDir.exists) {
-        testClasspath = testClasspath :+ mTestDir.string
-      }
-    }
+    var classpath = HashSSet.empty[String] ++ (for (
+      cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))
+    ) yield cif.path.string)
 
     for (m <- project.modules.values) {
       val mDir = projectOutDir / m.id / mainOutDirName
       if (mDir.exists) {
-        testClasspath = testClasspath :+ mDir.string
+        classpath = classpath + mDir.string
       }
-
-      testClasspath = testClasspath ++ (for (r <- ProjectUtil.moduleResources(m) ++ ProjectUtil.moduleTestResources(m)) yield r.string)
+      classpath = classpath ++ (for (r <- ProjectUtil.moduleResources(m) ++ ProjectUtil.moduleTestResources(m)) yield r.string)
+      classpath = classpath ++ (for (lib <- dm.fetchDiffLibs(m)) yield Os.path(lib.main).string)
+      val mTestDir = projectOutDir / m.id / testOutDirName
+      if (mTestDir.exists) {
+        classpath = classpath + mTestDir.string
+        testClasspath = testClasspath :+ mTestDir.string
+      }
     }
 
-    for (lib <- dm.libMap.values) {
-      testClasspath = testClasspath :+ lib.main
-    }
-
-    val classpath: ISZ[String] = for (
-      cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))
-    ) yield cif.path.string
-
+    val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
     var args = javaOptions ++ ISZ[String](
-      "-classpath", st"${(scalaLib +: classpath, Os.pathSep)}".render,
+      "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
       "-R",
