@@ -68,7 +68,7 @@ object Test {
 
     val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
     var args = javaOptions ++ ISZ[String](
-      "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render,
+      "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render,
       "org.scalatest.tools.Runner",
       "-oF", "-P1",
       "-R",
