@@ -93,7 +93,7 @@ object cli {
 
   val commonCompileOpts: ISZ[Opt] = ISZ(
     Opt(name = "javac", longKey = "javac", shortKey = None(),
-      tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options")),
+      tpe = Type.Str(Some(','), Some("-source, 1.8, -target, 1.8, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options, -Xlint:deprecation")),
       description = "Javac options"
     ),
     Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
