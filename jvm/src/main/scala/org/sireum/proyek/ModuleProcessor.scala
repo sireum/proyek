@@ -38,7 +38,7 @@ object ModuleProcessor {
 
 import ModuleProcessor._
 
-@msig trait ModuleProcessor[I, M] {
+@msig trait ModuleProcessor[@imm I, @mut M] {
   @pure def root: Os.Path
 
   @pure def module: Module
