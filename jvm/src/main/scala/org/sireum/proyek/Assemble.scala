@@ -127,7 +127,6 @@ object Assemble {
       val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String]("--initialize-at-build-time", "--no-fallback",
         "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
         "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https", "--allow-incomplete-classpath",
-        "--trace-object-instantiation=java.util.concurrent.ForkJoinWorkerThread", "--diagnostics-mode",
         "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
       if (r.exitCode =!= 0) {
