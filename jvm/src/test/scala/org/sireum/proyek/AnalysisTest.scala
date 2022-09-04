@@ -27,6 +27,7 @@ package org.sireum.proyek
 import org.sireum._
 import org.sireum.lang.{ast => AST}
 import org.sireum.lang.symbol.Info
+import org.sireum.lang.tipe.TypeHierarchy
 import org.sireum.project._
 import org.sireum.proyek.Analysis.ModuleProcessor
 import org.sireum.proyek.ModuleProcessor.ProcessResult
@@ -71,7 +72,7 @@ object AnalysisTest {
       isIllFormed = T
     }
 
-    override def state(posOpt: Option[Position], s: logika.State): Unit = {}
+    override def state(posOpt: Option[Position], context: ISZ[String], th: TypeHierarchy, s: logika.State): Unit = {}
 
     override def inform(pos: Position, kind: org.sireum.logika.Logika.Reporter.Info.Kind.Type, message: String): Unit = {}
 
