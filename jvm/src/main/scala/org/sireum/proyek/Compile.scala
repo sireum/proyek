@@ -350,7 +350,7 @@ object Compile {
 
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      var env = ISZ[(String, String)]()
+      var env = ISZ[(String, String)]("PROYEK_JFX" ~> (javaHome / "lib" / "javafx.properties").exists.string)
       if (isJs) {
         env = env :+ (("PROYEK_JS", "true"))
       }
