@@ -72,7 +72,7 @@ object AnalysisTest {
       isIllFormed = T
     }
 
-    override def state(posOpt: Option[Position], context: ISZ[String], th: TypeHierarchy, s: logika.State): Unit = {}
+    override def state(posOpt: Option[Position], context: ISZ[String], th: TypeHierarchy, s: logika.State, atLinesFresh: B): Unit = {}
 
     override def inform(pos: Position, kind: org.sireum.logika.Logika.Reporter.Info.Kind.Type, message: String): Unit = {}
 
