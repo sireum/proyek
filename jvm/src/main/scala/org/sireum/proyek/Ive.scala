@@ -649,7 +649,8 @@ object Ive {
             |    <option name="uncheckedWarnings" value="true" />
             |    <option name="featureWarnings" value="true" />
             |    <parameters>
-            |      <parameter value="-target:jvm-1.8" />
+            |      <parameter value="-release" />
+            |      <parameter value="8" />
             |      <parameter value="-Yrangepos" />
             |      <parameter value="-Ydelambdafy:method" />
             |      <parameter value="-Xfatal-warnings" />
