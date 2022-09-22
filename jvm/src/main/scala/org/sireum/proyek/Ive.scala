@@ -42,7 +42,9 @@ object Ive {
           isUltimate: B,
           isServer: B,
           isDev: B,
-          force: B): Z = {
+          force: B,
+          javacOptions: ISZ[String],
+          scalacOptions: ISZ[String]): Z = {
 
     val dotIdea = path / ".idea"
     dotIdea.mkdirAll()
@@ -247,8 +249,8 @@ object Ive {
     writeModules()
     IVE.writeMisc(dotIdea, outDirName)
     IVE.writeCodeStyles(dotIdea)
-    IVE.writeCompiler(dotIdea)
-    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin)
+    IVE.writeCompiler(dotIdea, javacOptions)
+    IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, scalacOptions)
     IVE.writeScalaSettings(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeUiDesigner(dotIdea)
@@ -577,13 +579,16 @@ object Ive {
       }
     }
 
-    def writeCompiler(dotIdea: Os.Path): Unit = {
+    def writeCompiler(dotIdea: Os.Path, javacOptions: ISZ[String]): Unit = {
       val f = dotIdea / "compiler.xml"
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
             |  <component name="CompilerConfiguration">
             |    <option name="USE_RELEASE_OPTION" value="false" />
+            |  </component>
+            |  <component name="JavacSettings">
+            |    <option name="ADDITIONAL_OPTIONS_STRING" value="${(javacOptions, " ")}" />
             |  </component>
             |</project>
             |""".render
@@ -637,7 +642,7 @@ object Ive {
       println(s"Wrote $f")
     }
 
-    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path): Unit = {
+    def writeScalaCompiler(dotIdea: Os.Path, scalacPlugin: Os.Path, scalacOptions: ISZ[String]): Unit = {
       val f = dotIdea / "scala_compiler.xml"
       val scalacPluginPath = s"$scalacPlugin"
       f.writeOver(
@@ -649,11 +654,7 @@ object Ive {
             |    <option name="uncheckedWarnings" value="true" />
             |    <option name="featureWarnings" value="true" />
             |    <parameters>
-            |      <parameter value="-release" />
-            |      <parameter value="8" />
-            |      <parameter value="-Yrangepos" />
-            |      <parameter value="-Ydelambdafy:method" />
-            |      <parameter value="-Xfatal-warnings" />
+            |      ${(for (opt <- scalacOptions) yield st"""<parameter value="$opt" />""", "\n")}
             |    </parameters>
             |    <plugins>
             |      <plugin path="$scalacPluginPath" />

@@ -194,7 +194,7 @@ object cli {
         tpe = Type.Choice("edition", None(), ISZ("community", "ultimate", "server")),
         description = "IntelliJ edition (auto-detected if there is only one installed)"
       )
-    ),
+    ) ++ (for (opt <- commonCompileOpts if opt.name === "javac" || opt.name === "scalac") yield opt),
     groups = ISZ(
       projectOptGroup,
       ivyOptGroup
