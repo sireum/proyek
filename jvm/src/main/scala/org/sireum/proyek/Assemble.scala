@@ -87,6 +87,10 @@ object Assemble {
       }
     }
 
+    for (f <- Os.Path.walk(metaDir, F, F, (p: Os.Path) => p.name === "native-image.properties")) {
+      f.removeAll()
+    }
+
     val manifest = metaDir / manifestMf
     val mainOpt: Option[ST] = mainClassNameOpt.map((mainClassName: String) => st"Main-Class: $mainClassName")
     manifest.writeOver(
