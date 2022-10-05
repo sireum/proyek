@@ -144,7 +144,7 @@ object Ive {
     def writeModules(): Unit = {
       (path / ".idea_modules").removeAll()
 
-      for (p <- dotIdea.list if p.ext === "iml") {
+      for (p <- dotIdea.list if p.ext == "iml") {
         p.removeAll()
       }
 
@@ -313,7 +313,7 @@ object Ive {
 
         val jbrHome: Os.Path = if (Os.isMac) ideaDir / "jbr" / "Contents" / "Home" else ideaDir / "jbr"
 
-        val jdkModules: Set[String] = Set ++ (for (p <- (javaHome / "jmods").list if p.ext === "jmod") yield
+        val jdkModules: Set[String] = Set ++ (for (p <- (javaHome / "jmods").list if p.ext == "jmod") yield
           ops.StringOps(p.name).substring(0, p.name.size - 5)
           )
 

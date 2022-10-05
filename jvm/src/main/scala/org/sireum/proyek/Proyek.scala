@@ -101,7 +101,7 @@ object Proyek {
         eprintln(s"$f is not a file")
         return None()
       }
-      if (f.ext =!= "cmd") {
+      if (f.ext != "cmd") {
         eprintln(s"$f is not a .cmd Slash script file")
         return None()
       }
@@ -217,7 +217,7 @@ object Proyek {
   @pure def hasScalaSource(project: org.sireum.project.Project): B = {
     for (m <- project.modules.values;
          src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m);
-         _ <- Os.Path.walk(src, F, F, (p: Os.Path) => p.ext === "scala")) {
+         _ <- Os.Path.walk(src, F, F, (p: Os.Path) => p.ext == "scala")) {
       return T
     }
     return F

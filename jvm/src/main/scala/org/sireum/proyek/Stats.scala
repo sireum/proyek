@@ -261,7 +261,7 @@ object Stats {
         return ProcessResult(imm = infoMap, tipeStatus = F, save = F, changed = T)
       }
       sc.info = sc.info(numOfFiles = inputs.size)
-      @strictpure def numOfLines(content: String): Z = ops.StringOps(content).split((c: C) => c === '\n').size
+      @strictpure def numOfLines(content: String): Z = ops.StringOps(content).split((c: C) => c == '\n').size
       for (input <- inputs) {
         sc.info = sc.info(numOfLines = sc.info.numOfLines + numOfLines(input.content))
       }
@@ -364,7 +364,7 @@ object Stats {
         ).run(infoMap, F, dm, reporter))
 
       val mvis: ISZ[(String, RunResult[HashSMap[String, Info]])] =
-        if (par =!= 1) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
+        if (par != 1) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)
         else for (module <- workModules.elements) yield runModule(module)
 
       for (pair <- mvis) {
@@ -390,10 +390,10 @@ object Stats {
     }
     @strictpure def combine(info1: Info, info2: Info): Info = info1.combine(info2)
     @pure def info2ST(title: String, info: Info): ST = {
-      val slangST: ST = if (info.numOfFiles === 0) st"0,-,-,-,-,-,-,-"
+      val slangST: ST = if (info.numOfFiles == 0) st"0,-,-,-,-,-,-,-"
       else st"${info.numOfFiles},${info.numOfLines},${info.numOfTypes},${info.numOfFields},${info.numOfMethods},${info.numOfStmts},${info.numOfExps},${info.numOfPatterns}"
-      val scalaST: ST = if (info.numOfScalaFiles === 0) st"0,-" else st"${info.numOfScalaFiles},${info.numOfScalaLines}"
-      val javaST: ST = if (info.numOfJavaFiles === 0) st"0,-" else st"${info.numOfJavaFiles},${info.numOfJavaLines}"
+      val scalaST: ST = if (info.numOfScalaFiles == 0) st"0,-" else st"${info.numOfScalaFiles},${info.numOfScalaLines}"
+      val javaST: ST = if (info.numOfJavaFiles == 0) st"0,-" else st"${info.numOfJavaFiles},${info.numOfJavaLines}"
       return st"$title,$slangST,$scalaST,$javaST,${info.numOfFiles + info.numOfScalaFiles + info.numOfJavaFiles},${info.numOfLines + info.numOfScalaLines + info.numOfJavaLines}"
     }
     output.writeOver(

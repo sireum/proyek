@@ -87,7 +87,7 @@ object Assemble {
       }
     }
 
-    for (f <- Os.Path.walk(metaDir, F, F, (p: Os.Path) => p.name === "native-image.properties")) {
+    for (f <- Os.Path.walk(metaDir, F, F, (p: Os.Path) => p.name == "native-image.properties")) {
       f.removeAll()
     }
 
@@ -133,7 +133,7 @@ object Assemble {
         "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https", "--allow-incomplete-classpath",
         "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
-      if (r.exitCode =!= 0) {
+      if (r.exitCode != 0) {
         eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
         eprintln(r.out)
         eprintln(r.err)

@@ -347,7 +347,7 @@ object Analysis {
       seenModules = seenModules ++ workModules.keys
 
       if (!disableOutput) {
-        println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size === 1) "" else "s"}: ${(workModules.keys, ", ")} ...".render)
+        println(st"${if (info.verify) "Verifying" else "Type checking"} module${if (workModules.size == 1) "" else "s"}: ${(workModules.keys, ", ")} ...".render)
       }
 
       val runModule = (p: (String, B)) =>

@@ -318,7 +318,7 @@ object Compile {
       f.ext match {
         case string"scala" =>
           var cs = ISZ[C]()
-          for (c <- f.readCStream.takeWhile((c: C) => c =!= '\n')) {
+          for (c <- f.readCStream.takeWhile((c: C) => c != '\n')) {
             if (!c.isWhitespace) {
               cs = cs :+ c
             }
