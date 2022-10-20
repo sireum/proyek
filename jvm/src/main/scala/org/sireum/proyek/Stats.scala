@@ -246,8 +246,8 @@ object Stats {
       }
       val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], NameMap, TypeMap) = {
         val inputs = ops.ISZOps(for (p <- slangFiles) yield toInput(infoMap, p))
-        var nm: NameMap = HashMap.empty
-        var tm: TypeMap = HashMap.empty
+        var nm: NameMap = HashSMap.empty
+        var tm: TypeMap = HashSMap.empty
         val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
           FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
         nm = q._3

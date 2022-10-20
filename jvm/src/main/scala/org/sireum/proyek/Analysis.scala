@@ -130,8 +130,8 @@ object Analysis {
                   |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render)
           }
         }
-        var nm: Resolver.NameMap = HashMap.empty
-        var tm: Resolver.TypeMap = HashMap.empty
+        var nm: Resolver.NameMap = HashSMap.empty
+        var tm: Resolver.TypeMap = HashSMap.empty
         val ivyDeps = HashSet ++ module.ivyDeps
         var addBuiltIns = T
         if (ivyDeps.contains(DependencyManager.librarySharedKey)) {
@@ -182,7 +182,7 @@ object Analysis {
       if (reporter.hasError) {
         return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
-      var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashMap.empty), reporter)
+      var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashSMap.empty), reporter)
       if (!reporter.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
@@ -208,8 +208,8 @@ object Analysis {
           st"""Type checking and verifying files:
               |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
       }
-      var nm = HashMap.empty[ISZ[String], lang.symbol.Info]
-      var tm = HashMap.empty[ISZ[String], lang.symbol.TypeInfo]
+      var nm: lang.symbol.Resolver.NameMap = HashSMap.empty
+      var tm: lang.symbol.Resolver.TypeMap = HashSMap.empty
       if (info2.verify && verifyFileUris.nonEmpty) {
         @pure def shouldInclude(pos: message.Position): B = {
           pos.uriOpt match {
