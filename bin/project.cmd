@@ -20,7 +20,7 @@ import org.sireum._
 import org.sireum.project.ProjectUtil._
 import org.sireum.project.Project
 
-val logika = "logika"
+val infoflow = "infoflow"
 
 val proyek = "proyek"
 
@@ -29,7 +29,7 @@ val homeDir = Os.slashDir.up.canon
 val proyekJvm = moduleJvmPub(
   id = proyek,
   baseDir = homeDir,
-  jvmDeps = ISZ(logika),
+  jvmDeps = ISZ(infoflow),
   jvmIvyDeps = ISZ(),
   pubOpt = pub(
     desc = "Sireum Proyek",
