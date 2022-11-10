@@ -58,7 +58,7 @@ import ModuleProcessor._
   def process(imm: I,
               mut: M,
               shouldProcess: B,
-              changedFiles: HashMap[String, B],
+              changedFiles: HashSet[String],
               dm: DependencyManager,
               sourceFiles: ISZ[Os.Path],
               testSourceFiles: ISZ[Os.Path],
@@ -81,7 +81,7 @@ import ModuleProcessor._
     return FrontEnd.Input(p.read, Some(p.toUri))
   }
 
-  def run(imm: I, mut: M, dm: DependencyManager, reporter: Reporter): RunResult[I] = {
+  def run(imm: I, mut: M, dm: DependencyManager, files: HashSMap[String, String], reporter: Reporter): RunResult[I] = {
     var sourceInputs = ISZ[Os.Path]()
     var testSourceInputs = ISZ[Os.Path]()
     for (source <- ProjectUtil.moduleSources(module)) {
@@ -91,16 +91,29 @@ import ModuleProcessor._
       testSourceInputs = testSourceInputs ++ findSources(imm, testSource)
     }
 
-    val fingerprintMap = HashMap.empty[String, String] ++ (
-      if (par > 1 && sha3) ops.ISZOps(sourceInputs ++ testSourceInputs).
-        mParMapCores((p: Os.Path) => (root.relativize(p).string, fingerprint(imm, p)), par)
-      else for (p <- sourceInputs ++ testSourceInputs) yield (root.relativize(p).string, fingerprint(imm, p)))
+    var _initFingerprintMap = F
+    var _fingerprintMap = HashMap.empty[String, String]
+    def fingerprintMap: HashMap[String, String] = {
+      if (!_initFingerprintMap) {
+        _initFingerprintMap = T
+        _fingerprintMap = _fingerprintMap ++ (
+          if (par > 1 && sha3) ops.ISZOps(sourceInputs ++ testSourceInputs).
+            mParMapCores((p: Os.Path) => (root.relativize(p).string, fingerprint(imm, p)), par)
+          else for (p <- sourceInputs ++ testSourceInputs) yield (root.relativize(p).string, fingerprint(imm, p)))
+      }
+      return _fingerprintMap
+    }
 
     val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
-    val (shouldProcess, changedFiles): (B, HashMap[String, B]) = if (!force && fingerprintCache.exists) {
+    val (shouldProcess, changedFiles): (B, HashSet[String]) = if (files.nonEmpty) {
+      val cfSet = HashSet.empty[String] ++
+        (for (input <- sourceInputs if files.contains(input.string)) yield input.string) ++
+        (for (input <- testSourceInputs if files.contains(input.string)) yield input.string)
+      (cfSet.nonEmpty, cfSet)
+    } else if (!force && fingerprintCache.exists) {
       val jsonParser = Json.Parser.create(fingerprintCache.read)
       val map = jsonParser.parseHashMap(jsonParser.parseString _, jsonParser.parseString _)
-      var cfMap = HashMap.empty[String, B]
+      var cfSet = HashSet.empty[String]
       @strictpure def toAbs(path: String): String = {
         val p = Os.path(path)
         (if (p.isAbs) p else root / path).string
@@ -113,21 +126,20 @@ import ModuleProcessor._
             case Some(v) =>
               if (p._2 != v) {
                 diff = T
-                cfMap = cfMap + toAbs(k) ~> T
+                cfSet = cfSet + toAbs(k)
               }
             case _ =>
           }
         }
         for (k <- fingerprintMap.keys if !map.contains(k)) {
           diff = T
-          cfMap = cfMap + toAbs(k) ~> F
         }
-        (diff, cfMap)
+        (diff, cfSet)
       } else {
-        (T, cfMap)
+        (T, cfSet)
       }
     } else {
-      (T, HashMap.empty)
+      (T, HashSet.empty)
     }
     if (shouldProcess) {
       fingerprintCache.removeAll()

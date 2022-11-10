@@ -101,7 +101,7 @@ object Analysis {
     override def process(info: Info,
                          cache: Smt2.Cache,
                          shouldProcess: B,
-                         changedFiles: HashMap[String, B],
+                         changedFiles: HashSet[String],
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
@@ -294,6 +294,7 @@ object Analysis {
           config: Config,
           cache: Smt2.Cache,
           files: HashSMap[String, String],
+          filesWatched: B,
           vfiles: ISZ[String],
           line: Z,
           par: Z,
@@ -361,7 +362,7 @@ object Analysis {
           followSymLink = followSymLink,
           verbose = verbose,
           outDir = outDir
-        ).run(info, cache, dm, reporter))
+        ).run(info, cache, dm, if (filesWatched) files else HashSMap.empty, reporter))
 
       val mvis: ISZ[(String, RunResult[Info])] =
         if (par != 1) ops.ISZOps(workModules.entries).mParMapCores(runModule, par)

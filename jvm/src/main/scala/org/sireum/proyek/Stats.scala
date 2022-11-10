@@ -224,7 +224,7 @@ object Stats {
     override def process(infoMap: HashSMap[String, Info],
                          b: B,
                          shouldProcess: B,
-                         changedFiles: HashMap[String, B],
+                         changedFiles: HashSet[String],
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
@@ -361,7 +361,7 @@ object Stats {
           strictAliasing = strictAliasing,
           followSymLink = followSymLink,
           outDir = outDir
-        ).run(infoMap, F, dm, reporter))
+        ).run(infoMap, F, dm, HashSMap.empty, reporter))
 
       val mvis: ISZ[(String, RunResult[HashSMap[String, Info]])] =
         if (par != 1) ops.ISZOps(workModules.elements).mParMapCores(runModule, par)

@@ -293,14 +293,14 @@ class AnalysisTest extends TestSuite {
       val cache = Smt2.NoCache()
 
       val reporter = new ReporterImpl(ISZ())
-      val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashMap.empty, tempProject.dm,
+      val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashSet.empty, tempProject.dm,
         test1Sources, ISZ(), reporter)
       assert(r2)
       assert(reporter.messages.isEmpty)
       assert(vi2.thMap.get("test1").nonEmpty)
       assert(vi2.thMap.get("test2").isEmpty)
 
-      val ProcessResult(vi3, _, r3, _) = tempProject.test2Lmp.process(vi2, cache, T, HashMap.empty, tempProject.dm,
+      val ProcessResult(vi3, _, r3, _) = tempProject.test2Lmp.process(vi2, cache, T, HashSet.empty, tempProject.dm,
         test2Sources, ISZ(), reporter)
       assert(r3)
       assert(reporter.messages.isEmpty)
@@ -308,14 +308,14 @@ class AnalysisTest extends TestSuite {
       assert(vi3.thMap.get("test2").nonEmpty)
 
       val ProcessResult(vi4, _, r4, _) = tempProject.test1Lmp.process(
-        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), cache, F, HashMap.empty, tempProject.dm,
+        vi3(files = vi3.files + test2Slang.string ~> test2SlangContent2), cache, F, HashSet.empty, tempProject.dm,
         test1Sources, ISZ(), reporter)
       assert(!r4)
       assert(reporter.messages.isEmpty)
       assert(sysid(vi4.thMap.get("test1").get) == sysid(vi3.thMap.get("test1").get))
       assert(sysid(vi4.thMap.get("test2").get) == sysid(vi3.thMap.get("test2").get))
 
-      val ProcessResult(vi5, _, r5, _) = tempProject.test2Lmp.process(vi4, cache, F, HashMap.empty, tempProject.dm,
+      val ProcessResult(vi5, _, r5, _) = tempProject.test2Lmp.process(vi4, cache, F, HashSet.empty, tempProject.dm,
         test2Sources, ISZ(), reporter)
       assert(!r5)
       assert(reporter.messages.isEmpty)

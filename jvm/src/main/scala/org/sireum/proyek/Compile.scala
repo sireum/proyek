@@ -64,7 +64,7 @@ object Compile {
     override def process(o: (CompileStatus.Type, String),
                          ignore: B,
                          shouldProcess: B,
-                         changedFiles: HashMap[String, B],
+                         changedFiles: HashSet[String],
                          dm: DependencyManager,
                          sourceFiles: ISZ[Os.Path],
                          testSourceFiles: ISZ[Os.Path],
@@ -257,7 +257,7 @@ object Compile {
           scalacOptions = scalacOptions,
           scalacPlugin = dm.scalacPlugin,
           isJs = isJs
-        ).run((CompileStatus.Compiled, ""), T, dm, message.Reporter.create)
+        ).run((CompileStatus.Compiled, ""), T, dm, HashSMap.empty, message.Reporter.create)
         val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
         for (p <- r) {
