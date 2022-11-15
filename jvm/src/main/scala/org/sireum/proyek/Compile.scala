@@ -76,7 +76,7 @@ object Compile {
 
       var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
       if (isJs) {
-        classpath = dm.fetch(ISZ(s"org.scala-js::scalajs-library:${dm.scalaJsVersion}"))(0).path +: classpath
+        classpath = dm.fetch(ISZ(s"${DependencyManager.scalaJsKey}${dm.scalaJsVersion}"))(0).path +: classpath
       }
       classpath = classpath ++ (
         for (mDep <- dm.computeTransitiveDeps(module) if (outDir / mDep / mainOutDirName).exists) yield
@@ -86,7 +86,7 @@ object Compile {
       var plugins = ISZ(scalacPlugin)
       if (isJs) {
         plugins = plugins :+
-          dm.fetch(ISZ(s"${DependencyManager.scalaJsKey}${dm.scalaJsVersion}"))(0).path
+          dm.fetch(ISZ(s"${DependencyManager.scalaJsCompilerKey}${dm.scalaJsVersion}"))(0).path
       }
       val scOptions = scalacOptions :+ st"-Xplugin:${(plugins, ",")}".render
 
@@ -110,12 +110,12 @@ object Compile {
       if (mainOk) {
         if (testSourceFiles.nonEmpty) {
           val testOutDir = outDir / module.id / testOutDirName
-
           classpath = classpath ++ (
             for (mDep <- dm.computeTransitiveDeps(module) if (outDir / mDep / testOutDirName).exists) yield
               outDir / mDep / testOutDirName
             )
           classpath = testOutDir +: classpath
+          classpath = classpath ++ dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}")).map((cif: CoursierFileInfo) => cif.path)
           testOutDir.removeAll()
           testOutDir.mkdirAll()
 

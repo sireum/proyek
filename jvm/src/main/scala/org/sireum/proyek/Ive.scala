@@ -49,6 +49,20 @@ object Ive {
     val dotIdea = path / ".idea"
     dotIdea.mkdirAll()
 
+    val testLibs: ISZ[ST] = {
+      var r = ISZ[ST]()
+      for (cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))) {
+        val name = DependencyManager.libName(cif)
+        if (!DependencyManager.ignoredLibraryNames.contains(name)) {
+          dm.libMap.get(name) match {
+            case Some(lib) => r = r :+ st"""<orderEntry type="library" exported="" scope="TEST" name="${lib.name}" level="project" />"""
+            case _ => halt(s"Could not find library: $name")
+          }
+        }
+      }
+      r
+    }
+
     def writeLibraries(): Unit = {
       val ideaLib = dotIdea / "libraries"
       ideaLib.removeAll()
@@ -167,8 +181,12 @@ object Ive {
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, src)}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- ProjectUtil.moduleTestResources(m)) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, rsc)}" type="java-test-resource" />"""
-        val libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
+        var libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
           st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
+        if (m.deps.isEmpty) {
+          libs = libs ++ testLibs
+        }
+
         val st =
           st"""<?xml version="1.0" encoding="UTF-8"?>
               |<module type="JAVA_MODULE" version="4">
