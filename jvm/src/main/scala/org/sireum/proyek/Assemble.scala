@@ -75,7 +75,15 @@ object Assemble {
       Asm.rewriteReleaseFence(contentDir)
     }
 
-    for (lib <- dm.libMap.values) {
+    var testLibNames = HashSet.empty[String]
+    for (cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))) {
+      val name = DependencyManager.libName(cif)
+      if (!DependencyManager.ignoredLibraryNames.contains(name) && !ops.StringOps(name).startsWith("org.scala-lang.modules.scala-xml_")) {
+        testLibNames = testLibNames + name
+      }
+    }
+
+    for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
       Os.path(lib.main).unzipTo(contentDir)
     }
 

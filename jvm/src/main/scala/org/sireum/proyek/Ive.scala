@@ -53,11 +53,9 @@ object Ive {
       var r = ISZ[ST]()
       for (cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))) {
         val name = DependencyManager.libName(cif)
-        if (!DependencyManager.ignoredLibraryNames.contains(name)) {
-          dm.libMap.get(name) match {
-            case Some(lib) => r = r :+ st"""<orderEntry type="library" exported="" scope="TEST" name="${lib.name}" level="project" />"""
-            case _ => halt(s"Could not find library: $name")
-          }
+        dm.libMap.get(name) match {
+          case Some(lib) => r = r :+ st"""<orderEntry type="library" exported="" scope="TEST" name="${lib.name}" level="project" />"""
+          case _ =>
         }
       }
       r
@@ -182,8 +180,13 @@ object Ive {
         val testResources: ISZ[ST] = for (rsc <- ProjectUtil.moduleTestResources(m)) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, rsc)}" type="java-test-resource" />"""
         var libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
-          st"""<orderEntry type="library" name="${lib.name}" level="project" exported="" />"""
-        if (m.deps.isEmpty) {
+          st"""<orderEntry type="library" exported="" name="${lib.name}" level="project" />"""
+
+        var ancestorHasTest = F
+        for (superm <- dm.computeTransitiveDeps(m) if ProjectUtil.moduleTestSources(project.modules.get(superm).get).nonEmpty) {
+          ancestorHasTest = T
+        }
+        if (!ancestorHasTest && testSources.nonEmpty) {
           libs = libs ++ testLibs
         }
 

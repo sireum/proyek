@@ -115,7 +115,7 @@ object Compile {
               outDir / mDep / testOutDirName
             )
           classpath = testOutDir +: classpath
-          classpath = classpath ++ dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}")).map((cif: CoursierFileInfo) => cif.path)
+          classpath = classpath ++ dm.fetch(ISZ(s"${dm.toJsDep(DependencyManager.scalaTestKey)}${dm.scalaTestVersion}")).map((cif: CoursierFileInfo) => cif.path)
           testOutDir.removeAll()
           testOutDir.mkdirAll()
 
