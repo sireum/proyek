@@ -174,6 +174,25 @@ object cli {
     )
   )
 
+  val depTool: Tool = Tool(
+    name = "dep",
+    command = "dep",
+    description = "Sireum proyek Ivy dependency visualizer",
+    header = "Sireum Proyek Ivy Dependency Visualizer",
+    usage = "<options>* <dir>",
+    usageDescOpt = None(),
+    opts = ISZ(
+      Opt(name = "js", longKey = "js", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Scala.js dependency"
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup,
+      ivyOptGroup
+    )
+  )
+
   val iveTool: Tool = Tool(
     name = "ive",
     command = "ive",
@@ -358,7 +377,7 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, iveTool, logikaProyekTool, publishTool, runTool, statsTool, testTool,
+    subs = ISZ(assembleTool, compileTool, depTool, iveTool, logikaProyekTool, publishTool, runTool, statsTool, testTool,
       tipeProyekTool)
   )
 
