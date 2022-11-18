@@ -113,22 +113,17 @@ object Analysis {
         if (info.all) sourceFilePaths
         else ops.ISZOps(sourceFilePaths).filter((p: String) => info.files.contains(p))
 
-      if (!info.all && !force && checkFilePaths.isEmpty && changedFiles.isEmpty && info.thMap.get(module.id).nonEmpty) {
+      if (!info.all && !info.config.interp && !force && checkFilePaths.isEmpty && changedFiles.isEmpty &&
+        info.thMap.get(module.id).nonEmpty) {
         return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F)
       }
 
       val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap) = {
         if (info.verbose && sourceFilePaths.nonEmpty) {
-          if (info.verify) {
-            println(
-              st"""Parsing and type outlining files:
-                  |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render
-            )
-          } else {
-            println(
-              st"""Parsing, type outlining, and type checking files:
-                  |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render)
-          }
+          println(
+            st"""Parsing and type outlining files:
+                |${(for (p <- sourceFilePaths) yield st"* $p", "\n")}""".render
+          )
         }
         var nm: Resolver.NameMap = HashSMap.empty
         var tm: Resolver.TypeMap = HashSMap.empty
@@ -186,7 +181,9 @@ object Analysis {
       if (!reporter.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
-      val verifyFileUris: HashSSet[String] = if (info2.all && info2.verify) {
+      val verifyFileUris: HashSSet[String] = if (info2.config.interp) {
+        HashSSet.empty[String] ++ (for (input <- inputs) yield input.fileUriOpt.get)
+      } else if (info2.all && info2.verify) {
         var vfus = HashSSet.empty[String]
         for (input <- inputs if Proyek.firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
           vfus = vfus + input.fileUriOpt.get
@@ -203,9 +200,9 @@ object Analysis {
       if (reporter.hasError) {
         return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
-      if (info2.verify && info2.verbose && verifyFileUris.nonEmpty) {
+      if (info2.verbose && verifyFileUris.nonEmpty) {
         println(
-          st"""Type checking and verifying files:
+          st"""Type checking files:
               |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
       }
       var nm: lang.symbol.Resolver.NameMap = HashSMap.empty
@@ -258,13 +255,23 @@ object Analysis {
         thMap = info2.thMap + module.id ~> th,
         files = newFiles
       )
-      if (verifyFileUris.isEmpty) {
+      val config = info3.config
+      val fileSet: HashSSet[String] = if (config.interp && !info3.all) {
+        HashSSet.empty[String] ++ (for (f <- info3.vfiles) yield Os.path(f).toUri)
+      } else {
+        verifyFileUris
+      }
+      if (fileSet.isEmpty) {
         return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
       }
-      val config = info3.config
+      if (info3.verbose) {
+        println(
+          st"""Verifying files:
+              |${(for (uri <- fileSet.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
+      }
       Logika.checkTypedPrograms(
         verifyingStartTime = 0,
-        fileSet = verifyFileUris,
+        fileSet = fileSet,
         config = config,
         th = th,
         smt2f = (th: TypeHierarchy) =>
