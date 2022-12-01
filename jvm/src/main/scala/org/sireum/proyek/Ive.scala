@@ -37,7 +37,6 @@ object Ive {
           projectName: String,
           dm: DependencyManager,
           outDirName: String,
-          jbrVersion: String,
           ideaDir: Os.Path,
           isUltimate: B,
           isServer: B,
@@ -278,7 +277,7 @@ object Ive {
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
     IVE.writeApplicationConfigs(force, sireumHome, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion,
-      jbrVersion, if (isDev) "-dev" else "")
+      if (isDev) "-dev" else "")
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -312,7 +311,6 @@ object Ive {
                                 isServer: B,
                                 javaHome: Os.Path,
                                 javaVersion: String,
-                                jbrVersion: String,
                                 devSuffix: String): Unit = {
       val ult: String = if (isUltimate) "-ult" else ""
       val isLocal: B = ops.StringOps(sireumHome.canon.string).startsWith(Os.home.string) && (sireumHome / "bin" / "distro.cmd").exists
@@ -374,7 +372,6 @@ object Ive {
           st"""    <jdk version="2">
               |      <name value="Sireum$devSuffix" />
               |      <type value="IDEA JDK" />
-              |      <version value="$jbrVersion" />
               |      <homePath value="$ideaDir" />
               |      <roots>
               |        <annotationsPath>
@@ -404,7 +401,6 @@ object Ive {
           st"""    <jdk version="2">
               |      <name value="Sireum$devSuffix (with Scala Plugin)" />
               |      <type value="IDEA JDK" />
-              |      <version value="$jbrVersion" />
               |      <homePath value="$ideaDir" />
               |      <roots>
               |        <annotationsPath>
@@ -464,7 +460,6 @@ object Ive {
               |    <jdk version="2">
               |      <name value="Jbr" />
               |      <type value="JavaSDK" />
-              |      <version value="$jbrVersion" />
               |      <homePath value="$jbrHome" />
               |      <roots>
               |        <annotationsPath>
