@@ -205,14 +205,18 @@ object cli {
         tpe = Type.Flag(F),
         description = "Create an empty project definition"
       ),
+      Opt(name = "edition", longKey = "edition", shortKey = Some('e'),
+        tpe = Type.Choice("edition", None(), ISZ("community", "ultimate", "server")),
+        description = "IntelliJ edition (auto-detected if there is only one installed)"
+      ),
       Opt(name = "force", longKey = "force", shortKey = Some('f'),
         tpe = Type.Flag(F),
         description = "Force generation of application-wide configurations (e.g., JDK info, etc.)"
       ),
-      Opt(name = "edition", longKey = "edition", shortKey = Some('e'),
-        tpe = Type.Choice("edition", None(), ISZ("community", "ultimate", "server")),
-        description = "IntelliJ edition (auto-detected if there is only one installed)"
-      )
+      Opt(name = "rebuildIve", longKey = "rebuild-ive", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Rebuild IVE"
+      ),
     ) ++ (for (opt <- commonCompileOpts if opt.name == "javac" || opt.name == "scalac") yield opt),
     groups = ISZ(
       projectOptGroup,
