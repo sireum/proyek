@@ -32,14 +32,32 @@ import org.sireum.proyek.Proyek._
 
 object Assemble {
 
-  val uberHeader: ISZ[String] = ISZ(
-    """@ 2>/dev/null # 2>nul & echo off & goto BOF   #""",
-    """exec java -jar "$0" "$@"                      #""",
-    """:BOF""",
-    """java -jar "%0" %*""",
-    """exit /B %errorlevel%""",
-    ""
-  )
+  val uberHeader: String = {
+    val bs = "\\"
+    st"""@ 2>/dev/null # 2>nul & echo off & goto BOF                               #
+        |JAVA=java                                                                 #
+        |if [ ! -z $${SIREUM_HOME} ]; then                                          #
+        |  if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then                             #
+        |    JAVA=$${SIREUM_HOME}/bin/win/java/bin/java.exe                         #
+        |  elif [ "$$(uname)" = "Darwin" ]; then                                    #
+        |    JAVA=$${SIREUM_HOME}/bin/mac/java/bin/java                             #
+        |  elif [ "$$(expr substr $$(uname -s) 1 5)" = "Linux" ]; then               #
+        |    if [ "$$(uname -m)" = "aarch64" ]; then                                #
+        |      JAVA=$${SIREUM_HOME}/bin/linux/arm/java/bin/java                     #
+        |    else                                                                  #
+        |      JAVA=$${SIREUM_HOME}/bin/linux/java/bin/java                         #
+        |    fi                                                                    #
+        |  fi                                                                      #
+        |fi                                                                        #
+        |exec $${JAVA} -jar "$$0" "$$@"                                               #
+        |:BOF
+        |setlocal
+        |set JAVA=java
+        |if defined SIREUM_HOME set JAVA=%SIREUM_HOME%${bs}bin${bs}win${bs}java${bs}bin${bs}java.exe
+        |%JAVA% -jar "%0" %*
+        |exit /B %errorlevel%
+        |""".render
+  }
 
   def run(path: Os.Path,
           outDirName: String,
@@ -58,7 +76,7 @@ object Assemble {
 
     val assembleDir = proyekDir / "assemble"
     val contentDir = assembleDir / "content"
-    val jar: Os.Path = if (isUber) assembleDir / s"$jarName.bat" else assembleDir / s"$jarName.jar"
+    val jar = assembleDir / s"$jarName.jar"
 
     jar.removeAll()
 
@@ -108,13 +126,19 @@ object Assemble {
           |""".render
     )
 
-    if (isUber) {
-      jar.writeOver(st"${(uberHeader, "\r\n")}".render)
-      jar.chmod("+x")
-    }
     contentDir.zipTo(jar)
 
-    println(s"Wrote $jar")
+    if (isUber) {
+      val temp = Os.temp()
+      temp.removeOnExit()
+      temp.writeOver(ops.StringOps(uberHeader).replaceAllLiterally("\n", "\r\n"))
+      val uber = assembleDir / s"$jarName.jar.bat"
+      uber.combineFrom(ISZ(temp, jar))
+      uber.chmod("+x")
+      println(s"Wrote $jar[.bat]")
+    } else {
+      println(s"Wrote $jar")
+    }
 
     if (isNative) {
       val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
