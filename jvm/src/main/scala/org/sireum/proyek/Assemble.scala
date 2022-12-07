@@ -77,8 +77,10 @@ object Assemble {
     val assembleDir = proyekDir / "assemble"
     val contentDir = assembleDir / "content"
     val jar = assembleDir / s"$jarName.jar"
+    val uber = assembleDir / s"${jar.name}.bat"
 
     jar.removeAll()
+    uber.removeAll()
 
     println(s"Assembling ...")
 
@@ -132,7 +134,6 @@ object Assemble {
       val temp = Os.temp()
       temp.removeOnExit()
       temp.writeOver(ops.StringOps(uberHeader).replaceAllLiterally("\n", "\r\n"))
-      val uber = assembleDir / s"$jarName.jar.bat"
       uber.combineFrom(ISZ(temp, jar))
       uber.chmod("+x")
       println(s"Wrote $jar[.bat]")
