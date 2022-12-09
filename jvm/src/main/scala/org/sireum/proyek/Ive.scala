@@ -556,7 +556,7 @@ object Ive {
       writeColors()
       writeScala()
 
-      (Os.home / s".SireumIVE$devSuffix-sandbox").mkdirAll()
+      (if (isLocal) sireumHome / ".settings" else Os.path(Os.prop("user.home").get)).mkdirAll()
     }
 
     def writeCodeStyles(dotIdea: Os.Path): Unit = {
