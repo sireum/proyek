@@ -313,12 +313,11 @@ object Ive {
                                 javaVersion: String,
                                 devSuffix: String): Unit = {
       val ult: String = if (isUltimate) "-ult" else ""
-      val isLocal: B = ops.StringOps(sireumHome.canon.string).startsWith(Os.home.string) && (sireumHome / "bin" / "distro.cmd").exists
+      val isLocal: B = ops.StringOps(sireumHome.canon.string).startsWith(Os.home.string)
       val configOptions: Os.Path =
         if (isServer) Os.home / ".config" / "JetBrains" / "RemoteDev-IU" / ops.StringOps(path.string).replaceAllChars('/', '_') / "options"
         else if (isLocal) sireumHome / ".settings" / s".SireumIVE$ult$devSuffix" / "config" / "options"
-        else if (Os.isMac) Os.home / "Library" / "Application Support" / "JetBrains" / s"SireumIVE$ult$devSuffix" / "options"
-        else Os.home / s".SireumIVE$ult$devSuffix" / "config" / "options"
+        else Os.path(Os.prop("user.home").get).canon / s".SireumIVE$ult$devSuffix" / "config" / "options"
       val configColors = (configOptions.up / "colors").canon
       configOptions.mkdirAll()
       configColors.mkdirAll()
