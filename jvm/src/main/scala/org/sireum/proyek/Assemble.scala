@@ -115,7 +115,18 @@ object Assemble {
       }
     }
 
-    for (f <- Os.Path.walk(metaDir, F, F, (p: Os.Path) => p.name == "native-image.properties")) {
+    @pure def filterMetaFile(p: Os.Path): B = {
+      ops.StringOps(p.ext).toUpper match {
+        case string"RSA" => return T
+        case string"SF" => return T
+        case string"DES" => return T
+        case string"DSA" => return T
+        case _ =>
+      }
+      return p.name == "native-image.properties"
+    }
+
+    for (f <- Os.Path.walk(metaDir, F, F, filterMetaFile _)) {
       f.removeAll()
     }
 
