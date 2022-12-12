@@ -38,12 +38,12 @@ object Ive {
           dm: DependencyManager,
           outDirName: String,
           ideaDir: Os.Path,
-          isUltimate: B,
-          isServer: B,
           isDev: B,
           force: B,
           javacOptions: ISZ[String],
-          scalacOptions: ISZ[String]): Z = {
+          scalacOptions: ISZ[String],
+          configPath: Os.Path,
+          sandboxPath: Os.Path): Z = {
 
     val dotIdea = path / ".idea"
     dotIdea.mkdirAll()
@@ -276,8 +276,7 @@ object Ive {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
-    IVE.writeApplicationConfigs(force, sireumHome, path, ideaDir, isUltimate, isServer, dm.javaHome, dm.javaVersion,
-      if (isDev) "-dev" else "")
+    IVE.writeApplicationConfigs(force, ideaDir, dm.javaHome, dm.javaVersion, isDev, configPath, sandboxPath)
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -304,20 +303,14 @@ object Ive {
           |</component>"""
 
     def writeApplicationConfigs(force: B,
-                                sireumHome: Os.Path,
-                                path: Os.Path,
                                 ideaDir: Os.Path,
-                                isUltimate: B,
-                                isServer: B,
                                 javaHome: Os.Path,
                                 javaVersion: String,
-                                devSuffix: String): Unit = {
-      val ult: String = if (isUltimate) "-ult" else ""
-      val isLocal: B = ops.StringOps(sireumHome.canon.string).startsWith(Os.home.string)
-      val configOptions: Os.Path =
-        if (isServer) Os.home / ".config" / "JetBrains" / "RemoteDev-IU" / ops.StringOps(path.string).replaceAllChars('/', '_') / "options"
-        else if (isLocal) sireumHome / ".settings" / s".SireumIVE$ult$devSuffix" / "config" / "options"
-        else Os.path(Os.prop("user.home").get).canon / s".SireumIVE$ult$devSuffix" / "config" / "options"
+                                isDev: B,
+                                configPath: Os.Path,
+                                sandboxPath: Os.Path): Unit = {
+      val devSuffix: String = if (isDev) "-dev" else ""
+      val configOptions = configPath / "options"
       val configColors = (configOptions.up / "colors").canon
       configOptions.mkdirAll()
       configColors.mkdirAll()
@@ -391,7 +384,7 @@ object Ive {
               |        </javadocPath>
               |      </roots>
               |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="${if (isLocal) (sireumHome / ".settings").string else "$USER_HOME$"}${Os.fileSep}.SireumIVE$devSuffix-sandbox" />
+              |        <option name="mySandboxHome" value="$sandboxPath" />
               |      </additional>
               |    </jdk>"""
 
@@ -420,7 +413,7 @@ object Ive {
               |        </javadocPath>
               |      </roots>
               |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="${if (isLocal) (sireumHome / ".settings").string else "$USER_HOME$"}/.SireumIVE$devSuffix-sandbox" />
+              |        <option name="mySandboxHome" value="$sandboxPath" />
               |      </additional>
               |    </jdk>"""
 
@@ -556,7 +549,7 @@ object Ive {
       writeColors()
       writeScala()
 
-      ((if (isLocal) sireumHome / ".settings" else Os.path(Os.prop("user.home").get)) / s".SireumIVE$devSuffix-sandbox").mkdirAll()
+      sandboxPath.mkdirAll()
     }
 
     def writeCodeStyles(dotIdea: Os.Path): Unit = {
