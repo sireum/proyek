@@ -70,7 +70,7 @@ object Run {
       st"${(javaArgs, "\n")}".render)
 
     val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
-    proc"$javaExe @$argFile".at(dir).console.runCheck()
+    proc"$javaExe @$argFile".at(dir).standard.console.runCheck()
 
     return 0
   }
