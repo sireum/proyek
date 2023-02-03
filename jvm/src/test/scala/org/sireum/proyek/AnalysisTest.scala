@@ -38,9 +38,24 @@ import org.sireum.message.{Message, Position}
 object AnalysisTest {
 
   class ReporterImpl(var _messages: ISZ[Message]) extends logika.Logika.Reporter {
-    var _owned: Boolean = false
+    private var isClonable: scala.Boolean = true
+    private var isOwned: scala.Boolean = false
     var _ignore: B = F
     var isIllFormed: B = F
+
+    override def $clonable: Boolean = isClonable
+
+    override def $clonable_=(b: Boolean): this.type = {
+      isClonable = false
+      this
+    }
+
+    override def $owned: scala.Boolean = isOwned
+
+    override def $owned_=(b: scala.Boolean): this.type = {
+      isOwned = b
+      this
+    }
 
     override def combine(other: logika.Logika.Reporter): logika.Logika.Reporter = {
       other match {
@@ -49,13 +64,6 @@ object AnalysisTest {
           isIllFormed = isIllFormed || other.isIllFormed
           return this
       }
-    }
-
-    override def $owned: Boolean = _owned
-
-    override def $owned_=(b: Boolean): ReporterImpl = {
-      _owned = b
-      this
     }
 
     override def $clone: ReporterImpl = {
