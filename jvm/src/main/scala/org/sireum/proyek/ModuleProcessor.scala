@@ -118,8 +118,8 @@ import ModuleProcessor._
         val p = Os.path(path)
         (if (p.isAbs) p else root / path).string
       }
-      if (jsonParser.errorOpt.isEmpty) {
-        var diff = F
+      var diff = fingerprintMap.size != map.size
+      if (jsonParser.errorOpt.isEmpty && !diff) {
         for (p <- map.entries) {
           val k = p._1
           fingerprintMap.get(k) match {
@@ -131,13 +131,8 @@ import ModuleProcessor._
             case _ =>
           }
         }
-        for (k <- fingerprintMap.keys if !map.contains(k)) {
-          diff = T
-        }
-        (diff, cfSet)
-      } else {
-        (T, cfSet)
       }
+      (diff, cfSet)
     } else {
       (T, HashSet.empty)
     }
