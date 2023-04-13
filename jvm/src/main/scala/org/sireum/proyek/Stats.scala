@@ -261,7 +261,9 @@ object Stats {
         return ProcessResult(imm = infoMap, tipeStatus = F, save = F, changed = T)
       }
       sc.info = sc.info(numOfFiles = inputs.size)
-      @strictpure def numOfLines(content: String): Z = ops.StringOps(content).split((c: C) => c == '\n').size
+      @pure def numOfLines(content: String): Z = {
+        return ops.StringOps(content).split((c: C) => c == '\n').size
+      }
       for (input <- inputs) {
         sc.info = sc.info(numOfLines = sc.info.numOfLines + numOfLines(input.content))
       }

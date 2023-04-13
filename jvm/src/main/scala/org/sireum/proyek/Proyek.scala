@@ -38,8 +38,9 @@ object Proyek {
   val testOutDirName: String = "test-classes"
   val sourcesOutDirName: String = "sources"
 
-  @strictpure def getProyekDir(path: Os.Path, outDirName: String, projectName: String, isJs: B): Os.Path =
-    path / outDirName / s"$projectName${if (isJs) "-js" else ""}"
+  @pure def getProyekDir(path: Os.Path, outDirName: String, projectName: String, isJs: B): Os.Path = {
+    return path / outDirName / s"$projectName${if (isJs) "-js" else ""}"
+  }
 
   @pure def normalizePath(path: String): String = {
     if (Os.isWin) {
@@ -49,7 +50,9 @@ object Proyek {
     }
   }
 
-  @strictpure def relUri(from: Os.Path, to: Os.Path): String = normalizePath(from.relativize(to).string)
+  @pure def relUri(from: Os.Path, to: Os.Path): String = {
+    return normalizePath(from.relativize(to).string)
+  }
 
   def loadVersions(path: Os.Path): Option[HashSMap[String, String]] = {
     if (!path.isFile) {

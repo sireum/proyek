@@ -47,7 +47,9 @@ object Publish {
           version: String,
           symlink: B): Z = {
 
-    @strictpure def shouldCopy(p: Os.Path): B = !ignoredPathNames.contains(p.name)
+    @pure def shouldCopy(p: Os.Path): B = {
+      return !ignoredPathNames.contains(p.name)
+    }
 
     val m2Base = m2Repo /+ orgName
     m2Base.mkdirAll()
