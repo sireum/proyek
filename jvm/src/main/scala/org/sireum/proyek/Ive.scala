@@ -31,8 +31,7 @@ import org.sireum.proyek.Proyek._
 
 object Ive {
 
-  def run(sireumHome: Os.Path,
-          path: Os.Path,
+  def run(path: Os.Path,
           project: Project,
           projectName: String,
           dm: DependencyManager,
@@ -265,6 +264,8 @@ object Ive {
       }
     }
 
+
+
     writeLibraries()
     writeModules()
     IVE.writeMisc(dotIdea, outDirName)
@@ -276,7 +277,7 @@ object Ive {
     IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
-    IVE.writeApplicationConfigs(force, ideaDir, dm.javaHome, dm.javaVersion, isDev, configPath, sandboxPath)
+    IVE.writeApplicationConfigs(force, dm.sireumHome, ideaDir, dm.javaHome, dm.javaVersion, isDev, configPath, sandboxPath)
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
   }
@@ -303,6 +304,7 @@ object Ive {
           |</component>"""
 
     def writeApplicationConfigs(force: B,
+                                sireumHome: Os.Path,
                                 ideaDir: Os.Path,
                                 javaHome: Os.Path,
                                 javaVersion: String,
@@ -375,6 +377,7 @@ object Ive {
               |          <root type="composite">
               |${(jbrClassPath, "\n")}
               |${(ideaLibs, "\n")}
+              |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/terminal/lib/terminal.jar!/" type="simple" />
               |          </root>
               |        </classPath>
               |        <javadocPath>
@@ -404,6 +407,7 @@ object Ive {
               |${(ideaLibs, "\n")}
               |${(ideaJavaLibs, "\n")}
               |${(ideaScalaLibs, "\n")}
+              |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/terminal/lib/terminal.jar!/" type="simple" />
               |          </root>
               |        </classPath>
               |        <javadocPath>
@@ -544,10 +548,57 @@ object Ive {
         println(s"Wrote $fileTypesXml")
       }
 
+      def writeAppXml(): Unit = {
+        val appXml = (configPath.up / "system" / "workspace" / "app.xml").canon
+        val smtlib2Option = """<option name="name" value="smtlib2" />"""
+        if (!appXml.exists) {
+          appXml.up.mkdirAll()
+          appXml.writeOver(
+            st"""<application>
+                |  <component name="TextMateSettings">
+                |    <bundles>
+                |      <BundleConfigBean>
+                |        $smtlib2Option
+                |        <option name="path" value="${sireumHome / "lib" / "textmate" / "smt2"}" />
+                |      </BundleConfigBean>
+                |    </bundles>
+                |  </component>
+                |</application>""".render
+          )
+          println(s"Wrote $appXml")
+          return
+        }
+
+        val appXmlContentOps = ops.StringOps(appXml.read)
+        if (appXmlContentOps.contains(smtlib2Option)) {
+          return
+        }
+
+        var i = appXmlContentOps.stringIndexOf("""<component name="TextMateSettings">""")
+        if (i < 0) {
+          return
+        }
+        val bundles = "<bundles>"
+        i = appXmlContentOps.stringIndexOfFrom(bundles, i)
+        if (i < 0) {
+          return
+        }
+
+        val bundlesPrefix =
+          st"""<bundles>
+              |      <BundleConfigBean>
+              |        $smtlib2Option
+              |        <option name="path" value="${sireumHome / "lib" / "textmate" / "smt2"}" />
+              |      </BundleConfigBean>"""
+        appXml.writeOver(s"${appXmlContentOps.substring(0, i)}${bundlesPrefix.render}${appXmlContentOps.substring(i + bundles.size, appXmlContentOps.size)}")
+        println(s"Updated $appXml")
+      }
+
       writeJdkTable()
       writeFileTypes()
       writeColors()
       writeScala()
+      writeAppXml()
 
       sandboxPath.mkdirAll()
     }
