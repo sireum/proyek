@@ -32,7 +32,7 @@ import org.sireum.project._
 import org.sireum.proyek.Analysis.ModuleProcessor
 import org.sireum.proyek.ModuleProcessor.ProcessResult
 import org.sireum.test._
-import org.sireum.logika.{LogikaTest, Smt2}
+import org.sireum.logika.LogikaTest
 import org.sireum.message.{Message, Position}
 
 object AnalysisTest {
@@ -298,7 +298,7 @@ class AnalysisTest extends TestSuite {
         skipMethods = ISZ(),
         skipTypes = ISZ()
       )
-      val cache = Smt2.NoCache()
+      val cache = logika.Logika.NoSmt2Cache.create
 
       val reporter = new ReporterImpl(ISZ())
       val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashSet.empty, tempProject.dm,

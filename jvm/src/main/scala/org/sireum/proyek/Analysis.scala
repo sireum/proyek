@@ -60,7 +60,7 @@ object Analysis {
                                 val strictAliasing: B,
                                 val followSymLink: B,
                                 val verbose: B,
-                                val outDir: Os.Path) extends proyek.ModuleProcessor[Info, Smt2.Cache] {
+                                val outDir: Os.Path) extends proyek.ModuleProcessor[Info, Logika.Cache] {
 
     @strictpure def sha3: B = F
 
@@ -99,7 +99,7 @@ object Analysis {
     }
 
     override def process(info: Info,
-                         cache: Smt2.Cache,
+                         cache: Logika.Cache,
                          shouldProcess: B,
                          changedFiles: HashSet[String],
                          dm: DependencyManager,
@@ -300,7 +300,7 @@ object Analysis {
           cacheTypeHierarchy: B,
           mapBox: MBox2[HashMap[String, HashMap[String, FrontEnd.Input]], HashMap[String, TypeHierarchy]],
           config: Config,
-          cache: Smt2.Cache,
+          cache: Logika.Cache,
           files: HashSMap[String, String],
           filesWatched: B,
           vfiles: ISZ[String],
