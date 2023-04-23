@@ -298,7 +298,7 @@ class AnalysisTest extends TestSuite {
         skipMethods = ISZ(),
         skipTypes = ISZ()
       )
-      val cache = logika.Logika.NoSmt2Cache.create
+      val cache = logika.NoTransitionSmt2Cache.create
 
       val reporter = new ReporterImpl(ISZ())
       val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashSet.empty, tempProject.dm,
