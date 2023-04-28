@@ -89,7 +89,7 @@ object AnalysisTest {
 
     override def timing(desc: String, timeInMs: Z): Unit = {}
 
-    override def coverage(pos: Position): Unit = {}
+    override def coverage(cached: B, pos: Position): Unit = {}
 
     override def empty: logika.Logika.Reporter = {
       return new ReporterImpl(ISZ())
