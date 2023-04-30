@@ -275,11 +275,7 @@ object Analysis {
         config = config,
         th = th,
         smt2f = (th: TypeHierarchy) =>
-          Smt2Impl.create(config.smt2Configs, Plugin.claimPlugins(info3.plugins),
-            th, config.timeoutInMs, config.fpRoundingMode,
-            config.charBitWidth, config.intBitWidth, config.useReal, config.simplifiedQuery, config.smt2Seq,
-            config.rawInscription, config.elideEncoding, config.atLinesFresh,
-            reporter.asInstanceOf[logika.Logika.Reporter]),
+          Smt2Impl.create(config, Plugin.claimPlugins(info3.plugins), th, reporter.asInstanceOf[logika.Logika.Reporter]),
         cache = cache,
         reporter = reporter.asInstanceOf[logika.Logika.Reporter],
         par = par,
