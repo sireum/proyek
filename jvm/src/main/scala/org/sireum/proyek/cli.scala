@@ -132,6 +132,10 @@ object cli {
     usage = "<options>* <dir>",
     usageDescOpt = None(),
     opts = ISZ(
+      Opt(name = "includeTests", longKey = "include-tests", shortKey = Some('t'),
+        tpe = Type.Flag(F),
+        description = "Include test classes"
+      ),
       Opt(name = "jar", longKey = "jar", shortKey = Some('j'),
         tpe = Type.Str(None(), None()),
         description = "The assembled jar filename (defaults to the project name)"

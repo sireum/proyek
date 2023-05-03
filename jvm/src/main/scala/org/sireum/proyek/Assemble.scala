@@ -67,7 +67,8 @@ object Assemble {
           dm: DependencyManager,
           mainClassNameOpt: Option[String],
           isNative: B,
-          isUber: B): Z = {
+          isUber: B,
+          includeTests: B): Z = {
 
     val trueF = (_: Os.Path) => T
 
@@ -96,10 +97,12 @@ object Assemble {
     }
 
     var testLibNames = HashSet.empty[String]
-    for (cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))) {
-      val name = DependencyManager.libName(cif)
-      if (!DependencyManager.ignoredLibraryNames.contains(name) && !ops.StringOps(name).startsWith("org.scala-lang.modules.scala-xml_")) {
-        testLibNames = testLibNames + name
+    if (!includeTests) {
+      for (cif <- dm.fetch(ISZ(s"${DependencyManager.scalaTestKey}${dm.scalaTestVersion}"))) {
+        val name = DependencyManager.libName(cif)
+        if (!DependencyManager.ignoredLibraryNames.contains(name) && !ops.StringOps(name).startsWith("org.scala-lang.modules.scala-xml_")) {
+          testLibNames = testLibNames + name
+        }
       }
     }
 
@@ -110,6 +113,10 @@ object Assemble {
     for (m <- project.modules.values) {
       val mDir = projectOutDir / m.id / mainOutDirName
       mDir.overlayCopy(contentDir, F, F, trueF, F)
+      if (includeTests) {
+        val tDir = projectOutDir / m.id / testOutDirName
+        tDir.overlayCopy(contentDir, F, F, trueF, F)
+      }
       for (r <- ProjectUtil.moduleResources(m)) {
         r.overlayCopy(contentDir, F, F, trueF, F)
       }
