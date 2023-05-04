@@ -37,85 +37,6 @@ import org.sireum.message.{Message, Position}
 
 object AnalysisTest {
 
-  class ReporterImpl(var _messages: ISZ[Message]) extends logika.Logika.Reporter {
-    private var isClonable: scala.Boolean = true
-    private var isOwned: scala.Boolean = false
-    var _ignore: B = F
-    var isIllFormed: B = F
-
-    override def $clonable: Boolean = isClonable
-
-    override def $clonable_=(b: Boolean): this.type = {
-      isClonable = false
-      this
-    }
-
-    override def $owned: scala.Boolean = isOwned
-
-    override def $owned_=(b: scala.Boolean): this.type = {
-      isOwned = b
-      this
-    }
-
-    override def combine(other: logika.Logika.Reporter): logika.Logika.Reporter = {
-      other match {
-        case other: ReporterImpl =>
-          _messages = _messages ++ other._messages
-          isIllFormed = isIllFormed || other.isIllFormed
-          return this
-      }
-    }
-
-    override def $clone: ReporterImpl = {
-      val r = new ReporterImpl(_messages)
-      r.isIllFormed = isIllFormed
-      r
-    }
-
-    override def string: String = {
-      return "ReporterImpl"
-    }
-
-    override def illFormed(): Unit = {
-      isIllFormed = T
-    }
-
-    override def state(plugins: ISZ[logika.plugin.ClaimPlugin], posOpt: Option[Position], context: ISZ[String],
-                       th: TypeHierarchy, s: logika.State, atLinesFresh: B): Unit = {}
-
-    override def inform(pos: Position, kind: org.sireum.logika.Logika.Reporter.Info.Kind.Type, message: String): Unit = {}
-
-    override def query(pos: Position, title: String, time: Z, forceReport: B, detailElided: B, r: logika.Smt2Query.Result): Unit = {}
-
-    override def timing(desc: String, timeInMs: Z): Unit = {}
-
-    override def coverage(cached: B, pos: Position): Unit = {}
-
-    override def empty: logika.Logika.Reporter = {
-      return new ReporterImpl(ISZ())
-    }
-
-    override def messages: ISZ[Message] = {
-      return _messages
-    }
-
-    override def ignore: B = {
-      return _ignore
-    }
-
-    override def setIgnore(newIgnore: B): Unit = {
-      _ignore = newIgnore
-    }
-
-    override def setMessages(newMessages: ISZ[Message]): Unit = synchronized {
-      _messages = newMessages
-    }
-
-    override def report(m: Message): Unit = synchronized {
-      super.report(m)
-    }
-  }
-
   val versions: String = $internal.RC.text(Vector("../../../../../../../../versions.properties")) { (_, _) => T }.head._2
 
   class TempProject(val root: Os.Path) {
@@ -199,7 +120,7 @@ object AnalysisTest {
       javaHome = javaHome,
       scalaHome = scalaHome,
       sireumHome = sireumHome,
-      cacheOpt = None(),
+      cacheOpt = None()
     )
 
     val test1Lmp: ModuleProcessor = ModuleProcessor(
@@ -210,7 +131,7 @@ object AnalysisTest {
       strictAliasing = T,
       followSymLink = F,
       verbose = F,
-      outDir = outDir,
+      outDir = outDir
     )
 
     val test2Lmp: ModuleProcessor = ModuleProcessor(
@@ -221,7 +142,7 @@ object AnalysisTest {
       strictAliasing = T,
       followSymLink = F,
       verbose = F,
-      outDir = outDir,
+      outDir = outDir
     )
   }
 
@@ -302,7 +223,7 @@ class AnalysisTest extends TestSuite {
       )
       val cache = logika.NoTransitionSmt2Cache.create
 
-      val reporter = new ReporterImpl(ISZ())
+      val reporter = logika.ReporterImpl.create
       val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashSet.empty, tempProject.dm,
         test1Sources, ISZ(), reporter)
       assert(r2)
