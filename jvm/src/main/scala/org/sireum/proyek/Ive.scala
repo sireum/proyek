@@ -551,7 +551,10 @@ object Ive {
       def writeAppXml(): Unit = {
         val appXml = (configPath.up / "system" / "workspace" / "app.xml").canon
         val smtlib2Option = """<option name="name" value="smtlib2" />"""
-        if (!appXml.exists) {
+        val sysmlv2Option = """<option name="name" value="sysmlv2" />"""
+        val aadlv2Option = """<option name="name" value="aadlv2" />"""
+
+        def cleanAppXml(): Unit = {
           appXml.up.mkdirAll()
           appXml.writeOver(
             st"""<application>
@@ -559,39 +562,34 @@ object Ive {
                 |    <bundles>
                 |      <BundleConfigBean>
                 |        $smtlib2Option
-                |        <option name="path" value="${sireumHome / "lib" / "textmate" / "smt2"}" />
+                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "smt2"}" />
+                |      </BundleConfigBean>
+                |      <BundleConfigBean>
+                |        $sysmlv2Option
+                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "sysml"}" />
+                |      </BundleConfigBean>
+                |      <BundleConfigBean>
+                |        $aadlv2Option
+                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "aadl"}" />
                 |      </BundleConfigBean>
                 |    </bundles>
                 |  </component>
                 |</application>""".render
           )
           println(s"Wrote $appXml")
+        }
+
+        if (!appXml.exists) {
+          cleanAppXml()
           return
         }
 
         val appXmlContentOps = ops.StringOps(appXml.read)
-        if (appXmlContentOps.contains(smtlib2Option)) {
+        if (appXmlContentOps.contains(smtlib2Option) && appXmlContentOps.contains(sysmlv2Option) &&
+          appXmlContentOps.contains(aadlv2Option)) {
           return
         }
-
-        var i = appXmlContentOps.stringIndexOf("""<component name="TextMateSettings">""")
-        if (i < 0) {
-          return
-        }
-        val bundles = "<bundles>"
-        i = appXmlContentOps.stringIndexOfFrom(bundles, i)
-        if (i < 0) {
-          return
-        }
-
-        val bundlesPrefix =
-          st"""<bundles>
-              |      <BundleConfigBean>
-              |        $smtlib2Option
-              |        <option name="path" value="${sireumHome / "lib" / "textmate" / "smt2"}" />
-              |      </BundleConfigBean>"""
-        appXml.writeOver(s"${appXmlContentOps.substring(0, i)}${bundlesPrefix.render}${appXmlContentOps.substring(i + bundles.size, appXmlContentOps.size)}")
-        println(s"Updated $appXml")
+        cleanAppXml()
       }
 
       writeJdkTable()
