@@ -362,36 +362,6 @@ object Ive {
         val ideaScalaLibs: ISZ[ST] = for (p <- Os.Path.walk(ideaPluginsDir / "Scala" / "lib", F, T, f => ops.StringOps(f.string).endsWith(".jar")))
           yield st"""            <root url="jar://${normalizePath(p.string)}!/" type="simple" />"""
 
-        val idea =
-          st"""    <jdk version="2">
-              |      <name value="Sireum$devSuffix" />
-              |      <type value="IDEA JDK" />
-              |      <homePath value="$ideaDir" />
-              |      <roots>
-              |        <annotationsPath>
-              |          <root type="composite">
-              |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/java/lib/jdkAnnotations.jar!/" type="simple" />
-              |          </root>
-              |        </annotationsPath>
-              |        <classPath>
-              |          <root type="composite">
-              |${(jbrClassPath, "\n")}
-              |${(ideaLibs, "\n")}
-              |            <root url="jar://$$APPLICATION_HOME_DIR$$/plugins/terminal/lib/terminal.jar!/" type="simple" />
-              |          </root>
-              |        </classPath>
-              |        <javadocPath>
-              |          <root type="composite">
-              |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
-              |          </root>
-              |        </javadocPath>
-              |      </roots>
-              |      <additional sdk="Jbr">
-              |        <option name="mySandboxHome" value="$sandboxPath" />
-              |      </additional>
-              |    </jdk>"""
-
-
         val ideaScala =
           st"""    <jdk version="2">
               |      <name value="Sireum$devSuffix (with Scala Plugin)" />
@@ -412,7 +382,7 @@ object Ive {
               |        </classPath>
               |        <javadocPath>
               |          <root type="composite">
-              |            <root url="https://docs.oracle.com/en/java/javase/11/docs/api/" type="simple" />
+              |            <root url="https://docs.oracle.com/en/java/javase/17/docs/api/" type="simple" />
               |          </root>
               |        </javadocPath>
               |      </roots>
@@ -479,7 +449,6 @@ object Ive {
               |      </roots>
               |      <additional />
               |    </jdk>
-              |$idea
               |$ideaScala
               |  </component>
               |</application>"""
@@ -496,7 +465,7 @@ object Ive {
         fileTypesXml.writeOver(
           st"""<application>
               |  <component name="FileTypeManager" version="18">
-              |    <ignoreFiles list=".settings;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc" />
+              |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;Isabelle.app;isabelle;java;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc" />
               |    <extensionMap>
               |      <mapping ext="cmd" type="Scala Worksheet" />
               |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
