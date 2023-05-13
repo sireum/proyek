@@ -53,7 +53,8 @@ object Analysis {
                        val skipMethods: ISZ[String],
                        val skipTypes: ISZ[String])
 
-  @record class ModuleProcessor(val root: Os.Path,
+  @record class ModuleProcessor(val sireumHome: Os.Path,
+                                val root: Os.Path,
                                 val module: Module,
                                 val force: B,
                                 val par: Z,
@@ -181,36 +182,36 @@ object Analysis {
       if (!reporter.hasError) {
         th = TypeOutliner.checkOutline(par, strictAliasing, th, reporter)
       }
-      val verifyFileUris: HashSSet[String] = if (info2.config.interp) {
-        HashSSet.empty[String] ++ (for (input <- inputs) yield input.fileUriOpt.get)
+      val verifyFileUriMap: HashSMap[String, String] = if (info2.config.interp) {
+        HashSMap.empty[String, String] ++ (for (input <- inputs) yield (input.fileUriOpt.get, input.content))
       } else if (info2.all && info2.verify) {
-        var vfus = HashSSet.empty[String]
+        var vfus = HashSMap.empty[String, String]
         for (input <- inputs if Proyek.firstCompactLineOps(conversions.String.toCStream(input.content)).contains("#Logika")) {
-          vfus = vfus + input.fileUriOpt.get
+          vfus = vfus + input.fileUriOpt.get ~> input.content
         }
         vfus
       } else {
         val vfileSet = HashSet ++ (for (f <- info2.vfiles) yield Os.path(f).toUri)
-        var vfus = HashSSet.empty[String]
+        var vfus = HashSMap.empty[String, String]
         for (input <- inputs if vfileSet.contains(input.fileUriOpt.get)) {
-          vfus = vfus + input.fileUriOpt.get
+          vfus = vfus + input.fileUriOpt.get ~> input.content
         }
         vfus
       }
       if (reporter.hasError) {
         return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
       }
-      if (info2.verbose && verifyFileUris.nonEmpty) {
+      if (info2.verbose && verifyFileUriMap.nonEmpty) {
         println(
           st"""Type checking files:
-              |${(for (uri <- verifyFileUris.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
+              |${(for (uri <- verifyFileUriMap.keys) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
       }
       var nm: lang.symbol.Resolver.NameMap = HashSMap.empty
       var tm: lang.symbol.Resolver.TypeMap = HashSMap.empty
-      if (info2.verify && verifyFileUris.nonEmpty) {
+      if (info2.verify && verifyFileUriMap.nonEmpty) {
         @pure def shouldInclude(pos: message.Position): B = {
           pos.uriOpt match {
-            case Some(uri) if verifyFileUris.contains(uri) =>
+            case Some(uri) if verifyFileUriMap.contains(uri) =>
               val line = info2.line
               return (line <= 0) || (pos.beginLine <= line && line <= pos.endLine)
             case _ =>
@@ -256,23 +257,31 @@ object Analysis {
         files = newFiles
       )
       val config = info3.config
-      val fileSet: HashSSet[String] = if (config.interp && !info3.all) {
-        HashSSet.empty[String] ++ (for (f <- info3.vfiles) yield Os.path(f).toUri)
+      val fileMap: HashSMap[String, String] = if (config.interp && !info3.all) {
+        var m = HashSMap.empty[String, String]
+        for (f <- info3.vfiles) {
+          val fileUri = Os.path(f).toUri
+          m = m + fileUri ~> verifyFileUriMap.get(fileUri).get
+        }
+        m
       } else {
-        verifyFileUris
+        verifyFileUriMap
       }
-      if (fileSet.isEmpty) {
+      if (fileMap.isEmpty) {
         return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
       }
       if (info3.verbose) {
         println(
           st"""Verifying files:
-              |${(for (uri <- fileSet.elements) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
+              |${(for (uri <- fileMap.keys) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
       }
+      val nameExePathMap = logika.Smt2Invoke.nameExePathMap(sireumHome)
       Logika.checkTypedPrograms(
         verifyingStartTime = 0,
-        fileSet = fileSet,
+        fileSet = HashSSet.empty[String] ++ fileMap.keys,
         config = config,
+        nameExePathMap = nameExePathMap,
+        maxCores = Os.numOfProcessors,
         th = th,
         smt2f = (th: TypeHierarchy) =>
           Smt2Impl.create(config, Plugin.claimPlugins(info3.plugins), th, reporter.asInstanceOf[logika.Logika.Reporter]),
@@ -282,7 +291,8 @@ object Analysis {
         plugins = info3.plugins,
         line = info3.line,
         skipMethods = info3.skipMethods,
-        skipTypes = info3.skipTypes
+        skipTypes = info3.skipTypes,
+        sources = for (p <- fileMap.entries) yield (Option.some(p._1), p._2)
       )
       return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
     }
@@ -358,6 +368,7 @@ object Analysis {
 
       val runModule = (p: (String, B)) =>
         (p._1, ModuleProcessor(
+          sireumHome = dm.sireumHome,
           root = root,
           module = project.modules.get(p._1).get,
           force = p._2,

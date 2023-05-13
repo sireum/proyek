@@ -124,6 +124,7 @@ object AnalysisTest {
     )
 
     val test1Lmp: ModuleProcessor = ModuleProcessor(
+      sireumHome = sireumHome,
       root = root,
       module = project.modules.get(test1.name).get,
       force = F,
@@ -135,6 +136,7 @@ object AnalysisTest {
     )
 
     val test2Lmp: ModuleProcessor = ModuleProcessor(
+      sireumHome = sireumHome,
       root = root,
       module = project.modules.get(test2.name).get,
       force = F,
