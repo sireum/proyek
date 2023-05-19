@@ -225,7 +225,7 @@ class AnalysisTest extends TestSuite {
       )
       val cache = logika.NoTransitionSmt2Cache.create
 
-      val reporter = logika.ReporterImpl.create(config.logPc, config.logRawPc, config.logVc)
+      val reporter = logika.ReporterImpl.create(config.logPc, config.logRawPc, config.logVc, config.detailedInfo)
       val ProcessResult(vi2, _, r2, _) = tempProject.test1Lmp.process(vi, cache, T, HashSet.empty, tempProject.dm,
         test1Sources, ISZ(), reporter)
       assert(r2)
