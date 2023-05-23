@@ -68,6 +68,7 @@ object Assemble {
           mainClassNameOpt: Option[String],
           isNative: B,
           isUber: B,
+          includeSources: B,
           includeTests: B): Z = {
 
     val trueF = (_: Os.Path) => T
@@ -108,14 +109,32 @@ object Assemble {
 
     for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
       Os.path(lib.main).unzipTo(contentDir)
+      if (includeSources) {
+        lib.sourcesOpt match {
+          case Some(src) => Os.path(src).unzipTo(contentDir)
+          case _ =>
+        }
+      }
     }
 
     for (m <- project.modules.values) {
       val mDir = projectOutDir / m.id / mainOutDirName
       mDir.overlayCopy(contentDir, F, F, trueF, F)
+      if (includeSources) {
+        val srcs = ProjectUtil.moduleSources(m)
+        for (src <- srcs) {
+          src.overlayCopy(contentDir, F, F, trueF, T)
+        }
+      }
       if (includeTests) {
         val tDir = projectOutDir / m.id / testOutDirName
         tDir.overlayCopy(contentDir, F, F, trueF, F)
+
+        if (includeSources) {
+          for (src <- ProjectUtil.moduleTestSources(m)) {
+            src.overlayCopy(contentDir, F, F, trueF, F)
+          }
+        }
       }
       for (r <- ProjectUtil.moduleResources(m)) {
         r.overlayCopy(contentDir, F, F, trueF, F)

@@ -132,7 +132,11 @@ object cli {
     usage = "<options>* <dir>",
     usageDescOpt = None(),
     opts = ISZ(
-      Opt(name = "includeTests", longKey = "include-tests", shortKey = Some('t'),
+      Opt(name = "includeSources", longKey = "include-sources", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Include source files"
+      ),
+      Opt(name = "includeTests", longKey = "include-tests", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Include test classes"
       ),
