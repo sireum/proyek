@@ -342,6 +342,9 @@ object cli {
         tpe = Type.Str(Some(','), None()),
         description = "Specific fully-qualified test class names to run"
       ),
+      Opt(name = "coverage", longKey = "coverage", shortKey = None(),
+        tpe = Type.Path(F, None()),
+        description = "JaCoCo exec, classdumpdir, report path prefix (without .exec, .dump, .coverage)"),
       Opt(name = "java", longKey = "java", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Java options"

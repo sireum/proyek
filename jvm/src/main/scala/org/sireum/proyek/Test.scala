@@ -32,6 +32,9 @@ import org.sireum.proyek.Proyek._
 
 object Test {
 
+  val EXEC_MISSING: Z = -5
+  val DUMP_MISSING: Z = -6
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -41,7 +44,8 @@ object Test {
           classNames: ISZ[String],
           suffixes: ISZ[String],
           packageNames: ISZ[String],
-          names: ISZ[String]): Z = {
+          names: ISZ[String],
+          coverageOpt: Option[String]): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
@@ -68,8 +72,23 @@ object Test {
 
     val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
     var args = javaOptions ++ ISZ[String](
-      "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render,
-      "org.scalatest.tools.Runner",
+      "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render)
+
+    val jacocoCli = dm.sireumHome / "lib" / "jacococli.jar"
+    coverageOpt match {
+      case Some(p) =>
+        val prefix = Os.path(p)
+        val exec = (prefix.up / s"${prefix.name}.exec").canon
+        val dump = (prefix.up / s"${prefix.name}.dump").canon
+        exec.removeAll()
+        dump.removeAll()
+        dump.mkdirAll()
+        val jacocoAgent = dm.sireumHome / "lib" / "jacocoagent.jar"
+        args = args :+ s"-javaagent:$jacocoAgent=destfile=$exec,classdumpdir=$dump"
+      case _ =>
+    }
+
+    args = args ++ ISZ[String]("org.scalatest.tools.Runner",
       "-oF", "-P1",
       "-R",
       st""""${
@@ -90,6 +109,41 @@ object Test {
 
     val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
     proc"$javaExe @$argFile".at(path).console.runCheck()
+
+    coverageOpt match {
+      case Some(p) =>
+        val prefix = Os.path(p)
+        val exec = (prefix.up / s"${prefix.name}.exec").canon
+        val dump = (prefix.up / s"${prefix.name}.dump").canon
+
+        if (!exec.exists) {
+          eprintln(s"$exec was not generated")
+          return EXEC_MISSING
+        }
+        if (dump.list.isEmpty) {
+          eprintln(s"$dump was not generated")
+          return DUMP_MISSING
+        }
+        val csv = (prefix.up / s"${prefix.name}.coverage.csv").canon
+        val html = (prefix.up / s"${prefix.name}.coverage").canon
+        csv.removeAll()
+        html.removeAll()
+        println("Generating coverage report ...")
+        println(s"* $csv")
+        println(s"* $html")
+        var commands = ISZ[String]("-jar", jacocoCli.string, "report", exec.string, "--encoding",
+          "UTF-8", "--classfiles", dump.string, "--csv", csv.string, "--html", html.string)
+        for (m <- project.modules.values; src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m)) {
+          commands = commands ++ ISZ[String]("--sourcefiles", src.string)
+        }
+
+        val jacocoArgFile = proyekDir / "jacoco-args"
+        jacocoArgFile.writeOver(st"${(commands, "\n")}".render)
+
+        proc"$javaExe @$jacocoArgFile".at(path).runCheck()
+        println()
+      case _ =>
+    }
 
     return 0
   }
