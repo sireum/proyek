@@ -74,7 +74,7 @@ object cli {
       ),
       Opt(name = "project", longKey = "project", shortKey = None(),
         tpe = Type.Path(F, None()),
-        description = "The project.cmd file accepting the 'json' argument (defaults to <dir>${Os.fileSep}bin${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)"
+        description = "The project.cmd file accepting the 'json' argument (defaults to <dir>${Os.fileSep}bin${Os.fileSep}project-standalone.cmd, or <dir>${Os.fileSep}bin${Os.fileSep}project.cmd; mutually exclusive with the 'json' option)"
       ),
       Opt(name = "slice", longKey = "slice", shortKey = None(),
         tpe = Type.Str(Some(','), None()),

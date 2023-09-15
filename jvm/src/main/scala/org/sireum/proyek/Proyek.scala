@@ -98,7 +98,13 @@ object Proyek {
     if (!loaded) {
       val f: Os.Path = projectOpt match {
         case Some(p) => Os.path(p)
-        case _ => path / "bin" / "project.cmd"
+        case _ =>
+          val projectStandalone = path / "bin" / "project-standalone.cmd"
+          if (projectStandalone.exists) {
+            projectStandalone
+          } else {
+            path / "bin" / "project.cmd"
+          }
       }
       if (!f.isFile) {
         eprintln(s"$f is not a file")
