@@ -232,6 +232,33 @@ object cli {
     )
   )
 
+  val slangCheckProyekTool: Tool = Tool(
+    name = "slangcheck",
+    command = "slangcheck",
+    description = "Slang Check generator",
+    header = "Slang Check generator",
+    usage = "<option>* <dir> <slang-file>+",
+    usageDescOpt = None(),
+    opts = ISZ(
+      Opt(name = "license", longKey = "license", shortKey = Some('l'),
+        tpe = Type.Path(multiple = F, default = None()), description = "License file to be inserted in the file header (expects a path)"),
+      Opt(name = "packageName", longKey = "packageName", shortKey = Some('p'),
+        tpe = Type.Path(multiple = F, default = None()), description = "Package name for generators (expects a string separated by .)"),
+      Opt(name = "outputDir", longKey = "output-dir", shortKey = Some('o'),
+        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated Slang Check files (expects a path; default is .)"),
+      Opt(name = "testDir", longKey = "test-dir", shortKey = Some('t'),
+        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated unit tests (expects a path; default is .)"),
+
+      org.sireum.logika.cli.parOpt,
+      org.sireum.lang.cli.strictAliasingOpt,
+      org.sireum.lang.cli.verboseOpt
+    ),
+    groups = ISZ(
+      org.sireum.proyek.cli.projectOptGroup,
+      org.sireum.proyek.cli.ivyOptGroup
+    )
+  )
+
 
   val logikaProyekTool: Tool = Tool(
     name = "logika",
@@ -254,6 +281,8 @@ object cli {
       ivyOptGroup
     ) ++ org.sireum.logika.cli.logikaVerifier.groups
   )
+
+
 
 
   val publishTool: Tool = Tool(
@@ -392,7 +421,7 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, depTool, iveTool, logikaProyekTool, publishTool, runTool, statsTool, testTool,
+    subs = ISZ(assembleTool, compileTool, depTool, iveTool, logikaProyekTool, publishTool, runTool, slangCheckProyekTool, statsTool, testTool,
       tipeProyekTool)
   )
 
