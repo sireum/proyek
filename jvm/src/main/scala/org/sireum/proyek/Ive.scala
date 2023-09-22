@@ -517,6 +517,22 @@ object Ive {
         println(s"Wrote $fileTypesXml")
       }
 
+      def writeEditorFont(): Unit = {
+        val editorFontXml = configOptions / "editor-font.xml"
+        editorFontXml.writeOver(
+          st"""<application>
+              |  <component name="DefaultFont">
+              |    <option name="VERSION" value="1" />
+              |    <option name="FONT_SIZE" value="18" />
+              |    <option name="FONT_SIZE_2D" value="18.0" />
+              |    <option name="FONT_FAMILY" value="Sireum Mono" />
+              |    <option name="USE_LIGATURES" value="true" />
+              |  </component>
+              |</application>""".render
+        )
+        println(s"Wrote $editorFontXml")
+      }
+
       def writeAppXml(): Unit = {
         val appXml = (configPath.up / "system" / "workspace" / "app.xml").canon
         val smtlib2Option = """<option name="name" value="smtlib2" />"""
@@ -566,6 +582,7 @@ object Ive {
       writeColors()
       writeScala()
       writeAppXml()
+      writeEditorFont()
 
       sandboxPath.mkdirAll()
     }
