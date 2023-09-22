@@ -59,6 +59,24 @@ object Assemble {
         |""".render
   }
 
+  val graalRtPackagesOrClasses: ISZ[String] = ISZ[String](
+    "com.zaxxer.nuprocess.internal",
+    "com.zaxxer.nuprocess.osx",
+    "com.zaxxer.nuprocess.linux",
+    "com.zaxxer.nuprocess.windows",
+    "com.sun.jna.internal",
+    "com.sun.jna"
+  )
+
+  val graalOpts: ISZ[String] = ISZ[String](
+    "--initialize-at-build-time",
+    "--enable-url-protocols=https",
+    "--report-unsupported-elements-at-runtime",
+    "--no-fallback",
+    "-H:+ReportExceptionStackTraces",
+    st"--initialize-at-run-time=${(graalRtPackagesOrClasses, ",")}".render
+  )
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -198,22 +216,8 @@ object Assemble {
       val platDir = homeBin / platformKind
       val dir = jar.up.canon
       val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
-      val rtPackagesOrClasses = ISZ[String](
-        "com.zaxxer.nuprocess.internal",
-        "com.zaxxer.nuprocess.osx",
-        "com.zaxxer.nuprocess.linux",
-        "com.zaxxer.nuprocess.windows",
-        "com.sun.jna.internal",
-        "com.sun.jna"
-      )
-      val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String](
-        "--initialize-at-build-time",
-        "--enable-url-protocols=https",
-        "--report-unsupported-elements-at-runtime",
-        "--no-fallback",
-        "-H:+ReportExceptionStackTraces",
-        st"--initialize-at-run-time=${(rtPackagesOrClasses, ",")}".render,
-        "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
+      val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
+        ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
       if (r.exitCode != 0) {
         eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
