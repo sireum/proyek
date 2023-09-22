@@ -198,9 +198,21 @@ object Assemble {
       val platDir = homeBin / platformKind
       val dir = jar.up.canon
       val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
-      val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String]("--initialize-at-build-time", "--no-fallback",
-        "--report-unsupported-elements-at-runtime", "-H:+ReportExceptionStackTraces", "-H:-DeadlockWatchdogExitOnTimeout",
-        "-H:DeadlockWatchdogInterval=0", "--enable-url-protocols=https", "--allow-incomplete-classpath",
+      val rtPackagesOrClasses = ISZ[String](
+        "com.zaxxer.nuprocess.internal",
+        "com.zaxxer.nuprocess.osx",
+        "com.zaxxer.nuprocess.linux",
+        "com.zaxxer.nuprocess.windows",
+        "com.sun.jna.internal",
+        "com.sun.jna"
+      )
+      val r = Os.proc((nativeImage.string +: flags) ++ ISZ[String](
+        "--initialize-at-build-time",
+        "--enable-url-protocols=https",
+        "--report-unsupported-elements-at-runtime",
+        "--no-fallback",
+        "-H:+ReportExceptionStackTraces",
+        st"--initialize-at-run-time=${(rtPackagesOrClasses, ",")}".render,
         "-jar", jar.string, (dir / jarName).string)).redirectErr.run()
       tempJar.copyOverTo(jar)
       if (r.exitCode != 0) {
