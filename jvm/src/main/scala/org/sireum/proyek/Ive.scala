@@ -526,7 +526,7 @@ object Ive {
                 |    <option name="VERSION" value="1" />
                 |    <option name="FONT_SIZE" value="18" />
                 |    <option name="FONT_SIZE_2D" value="18.0" />
-                |    <option name="FONT_FAMILY" value="Sireum Mono Plus" />
+                |    <option name="FONT_FAMILY" value="Sireum Mono" />
                 |    <option name="USE_LIGATURES" value="true" />
                 |  </component>
                 |</application>""".render
