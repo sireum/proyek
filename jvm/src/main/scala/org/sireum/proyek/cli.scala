@@ -241,13 +241,13 @@ object cli {
     usageDescOpt = None(),
     opts = ISZ(
       Opt(name = "license", longKey = "license", shortKey = Some('l'),
-        tpe = Type.Path(multiple = F, default = None()), description = "License file to be inserted in the file header (expects a path)"),
+        tpe = Type.Path(multiple = F, default = None()), description = "License file to be inserted in the file header"),
       Opt(name = "packageName", longKey = "packageName", shortKey = Some('p'),
-        tpe = Type.Path(multiple = F, default = None()), description = "Package name for generators (expects a string separated by .)"),
+        tpe = Type.Path(multiple = F, default = None()), description = "Package name for generators"),
       Opt(name = "outputDir", longKey = "output-dir", shortKey = Some('o'),
-        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated Slang Check files (expects a path; default is .)"),
+        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated Slang Check files"),
       Opt(name = "testDir", longKey = "test-dir", shortKey = Some('t'),
-        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated unit tests (expects a path; default is .)"),
+        tpe = Type.Path(multiple = F, default = None()), description = "Output directory for the generated unit tests"),
 
       org.sireum.logika.cli.parOpt,
       org.sireum.lang.cli.strictAliasingOpt,
