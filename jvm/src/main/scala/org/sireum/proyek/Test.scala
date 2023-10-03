@@ -140,8 +140,9 @@ object Test {
         val jacocoArgFile = proyekDir / "jacoco-args"
         jacocoArgFile.writeOver(st"${(commands, "\n")}".render)
 
-        proc"$javaExe @$jacocoArgFile".at(path).runCheck()
+        val exitCode = proc"$javaExe @$jacocoArgFile".at(path).run().exitCode
         println()
+        return exitCode
       case _ =>
     }
 
