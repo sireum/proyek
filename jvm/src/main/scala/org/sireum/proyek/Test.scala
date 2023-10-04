@@ -108,45 +108,46 @@ object Test {
     argFile.writeOver(st"${(args, "\n")}".render)
 
     val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
-    proc"$javaExe @$argFile".at(path).console.runCheck()
+    var exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
 
-    coverageOpt match {
-      case Some(p) =>
-        val prefix = Os.path(p)
-        val exec = (prefix.up / s"${prefix.name}.exec").canon
-        val dump = (prefix.up / s"${prefix.name}.dump").canon
+    if (exitCode == 0) {
+      coverageOpt match {
+        case Some(p) =>
+          val prefix = Os.path(p)
+          val exec = (prefix.up / s"${prefix.name}.exec").canon
+          val dump = (prefix.up / s"${prefix.name}.dump").canon
 
-        if (!exec.exists) {
-          eprintln(s"$exec was not generated")
-          return EXEC_MISSING
-        }
-        if (dump.list.isEmpty) {
-          eprintln(s"$dump was not generated")
-          return DUMP_MISSING
-        }
-        val csv = (prefix.up / s"${prefix.name}.coverage.csv").canon
-        val html = (prefix.up / s"${prefix.name}.coverage").canon
-        csv.removeAll()
-        html.removeAll()
-        println("Generating coverage report ...")
-        println(s"* $csv")
-        println(s"* $html")
-        var commands = ISZ[String]("-jar", jacocoCli.string, "report", exec.string, "--encoding",
-          "UTF-8", "--classfiles", dump.string, "--csv", csv.string, "--html", html.string)
-        for (m <- project.modules.values; src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m)) {
-          commands = commands ++ ISZ[String]("--sourcefiles", src.string)
-        }
+          if (!exec.exists) {
+            eprintln(s"$exec was not generated")
+            return EXEC_MISSING
+          }
+          if (dump.list.isEmpty) {
+            eprintln(s"$dump was not generated")
+            return DUMP_MISSING
+          }
+          val csv = (prefix.up / s"${prefix.name}.coverage.csv").canon
+          val html = (prefix.up / s"${prefix.name}.coverage").canon
+          csv.removeAll()
+          html.removeAll()
+          println("Generating coverage report ...")
+          println(s"* $csv")
+          println(s"* $html")
+          var commands = ISZ[String]("-jar", jacocoCli.string, "report", exec.string, "--encoding",
+            "UTF-8", "--classfiles", dump.string, "--csv", csv.string, "--html", html.string)
+          for (m <- project.modules.values; src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m)) {
+            commands = commands ++ ISZ[String]("--sourcefiles", src.string)
+          }
 
-        val jacocoArgFile = proyekDir / "jacoco-args"
-        jacocoArgFile.writeOver(st"${(commands, "\n")}".render)
+          val jacocoArgFile = proyekDir / "jacoco-args"
+          jacocoArgFile.writeOver(st"${(commands, "\n")}".render)
 
-        val exitCode = proc"$javaExe @$jacocoArgFile".at(path).run().exitCode
-        println()
-        return exitCode
-      case _ =>
+          exitCode = proc"$javaExe @$jacocoArgFile".at(path).run().exitCode
+          println()
+        case _ =>
+      }
     }
 
-    return 0
+    return exitCode
   }
 
 }
