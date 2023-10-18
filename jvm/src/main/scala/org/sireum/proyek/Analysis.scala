@@ -261,7 +261,10 @@ object Analysis {
         var m = HashSMap.empty[String, String]
         for (f <- info3.vfiles) {
           val fileUri = Os.path(f).toUri
-          m = m + fileUri ~> verifyFileUriMap.get(fileUri).get
+          verifyFileUriMap.get(fileUri) match {
+            case Some(content) => m = m + fileUri ~> content
+            case _ =>
+          }
         }
         m
       } else {
