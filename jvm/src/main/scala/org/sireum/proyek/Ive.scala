@@ -551,14 +551,6 @@ object Ive {
                 |        $smtlib2Option
                 |        <option name="path" value="${sireumHome / "resources" / "textmate" / "smt2"}" />
                 |      </BundleConfigBean>
-                |      <BundleConfigBean>
-                |        $sysmlv2Option
-                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "sysml"}" />
-                |      </BundleConfigBean>
-                |      <BundleConfigBean>
-                |        $aadlv2Option
-                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "aadl"}" />
-                |      </BundleConfigBean>
                 |    </bundles>
                 |  </component>
                 |</application>""".render
