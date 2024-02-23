@@ -114,7 +114,8 @@ object Proyek {
         eprintln(s"$f is not a .cmd Slash script file")
         return None()
       }
-      val r = proc"$f json".env(ISZ("SIREUM_HOME" ~> sireumHome.string)).
+      val cmds: ISZ[String] = if (Os.isWin) ISZ("cmd", "/C", f.name, "json") else ISZ(f.string, "json")
+      val r = Os.proc(cmds).at(f.up.canon).env(ISZ("SIREUM_HOME" ~> sireumHome.string)).
         console.outLineAction((s: String) => project.ProjectUtil.projectJsonLine(s).isEmpty).redirectErr.run()
       if (r.ok) {
         project.ProjectUtil.projectJsonLine(r.out) match {
