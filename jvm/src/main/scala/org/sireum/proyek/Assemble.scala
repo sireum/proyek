@@ -64,8 +64,9 @@ object Assemble {
     "com.zaxxer.nuprocess.osx",
     "com.zaxxer.nuprocess.linux",
     "com.zaxxer.nuprocess.windows",
+    "com.zaxxer.nuprocess",
     "com.sun.jna.internal",
-    "com.sun.jna"
+    "com.sun.jna",
   )
 
   val graalOpts: ISZ[String] = ISZ[String](
