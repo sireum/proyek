@@ -202,7 +202,7 @@ object Assemble {
         case Os.Kind.Mac => ("mac", ISZ())
         case Os.Kind.Linux => ("linux", ISZ())
         case Os.Kind.LinuxArm => ("linux/arm", ISZ())
-        case Os.Kind.Win => ("win", ISZ("--static", "-H:NativeLinkerOption=Winhttp.lib"))
+        case Os.Kind.Win => ("win", ISZ("-H:NativeLinkerOption=Winhttp.lib"))
         case _ => halt("Unsupported operating system")
       }
       val homeBin = dm.sireumHome / "bin"
