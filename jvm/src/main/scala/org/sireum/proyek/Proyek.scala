@@ -37,6 +37,7 @@ object Proyek {
   val mainOutDirName: String = "classes"
   val testOutDirName: String = "test-classes"
   val sourcesOutDirName: String = "sources"
+  val javadocOutDirName: String = "javadoc"
 
   @pure def getProyekDir(path: Os.Path, outDirName: String, projectName: String, isJs: B): Os.Path = {
     return path / outDirName / s"$projectName${if (isJs) "-js" else ""}"

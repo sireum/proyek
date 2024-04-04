@@ -145,6 +145,23 @@ object Publish {
         println(s"Wrote $m2SourcesJar")
       }
 
+      def writeJavadocJar(): Unit = {
+        val mOutJavadocDir = mOutDir / javadocOutDirName
+
+        val javadocMetaInf = mOutJavadocDir / metaInf / manifestMf
+        javadocMetaInf.up.mkdirAll()
+        javadocMetaInf.writeOver(
+          st"""Manifest-Version: 1.0
+              |Created-By: Sireum Proyek
+              |""".render
+        )
+
+        val m2JavadocJar = m2Base / module / version / s"$module-$version-javadoc.jar"
+        m2JavadocJar.up.mkdirAll()
+        mOutJavadocDir.zipTo(m2JavadocJar)
+        println(s"Wrote $m2JavadocJar")
+      }
+
       def writePom(): Unit = {
         val m2Pom = m2Base / module / version / s"$module-$version.pom"
         m2Pom.up.mkdirAll()
@@ -155,6 +172,7 @@ object Publish {
 
       writeMainJar()
       writeSourcesJar()
+      writeJavadocJar()
       writePom()
     }
 
