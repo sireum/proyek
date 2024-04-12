@@ -71,7 +71,7 @@ object Compile {
                          reporter: message.Reporter): ProcessResult[(CompileStatus.Type, String)] = {
 
       if (!shouldProcess) {
-        return ProcessResult(imm = (CompileStatus.Skipped, ""), tipeStatus = T, save = F, changed = F)
+        return ProcessResult(imm = (CompileStatus.Skipped, ""), tipeStatus = T, save = F, changed = F, time = 0)
       }
 
       var classpath: ISZ[Os.Path] = for (lib <- dm.fetchTransitiveLibs(module)) yield Os.path(lib.main)
@@ -132,15 +132,15 @@ object Compile {
             outDir = testOutDir
           )
           if (testOk) {
-            return ProcessResult(imm = (CompileStatus.Compiled, s"$mainOut$testOut"), tipeStatus = T, save = T, changed = T)
+            return ProcessResult(imm = (CompileStatus.Compiled, s"$mainOut$testOut"), tipeStatus = T, save = T, changed = T, time = 0)
           } else {
-            return ProcessResult(imm = (CompileStatus.Error, s"$mainOut$testOut"), tipeStatus = T, save = F, changed = T)
+            return ProcessResult(imm = (CompileStatus.Error, s"$mainOut$testOut"), tipeStatus = T, save = F, changed = T, time = 0)
           }
         } else {
-          return ProcessResult(imm = (CompileStatus.Compiled, mainOut), tipeStatus = T, save = T, changed = T)
+          return ProcessResult(imm = (CompileStatus.Compiled, mainOut), tipeStatus = T, save = T, changed = T, time = 0)
         }
       } else {
-        return ProcessResult(imm = (CompileStatus.Error, mainOut), tipeStatus = T, save = F, changed = T)
+        return ProcessResult(imm = (CompileStatus.Error, mainOut), tipeStatus = T, save = F, changed = T, time = 0)
       }
     }
 
@@ -270,7 +270,7 @@ object Compile {
           return -1
         }
         for (p <- ops.ISZOps(nextIds).zip(r)) {
-          val (mid, RunResult(_, _, changed)) = p
+          val (mid, RunResult(_, _, changed, _)) = p
           for (mDep <- project.poset.childrenOf(mid).elements) {
             newModules.get(mDep) match {
               case Some(b) => newModules = newModules + mDep ~> (b | changed)

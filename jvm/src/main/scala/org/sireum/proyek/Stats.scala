@@ -258,7 +258,7 @@ object Stats {
       val sc = StatsCollector(Context.Object, Info.create)
       var infoMap2 = infoMap + module.id ~> sc.info
       if (reporter.hasError) {
-        return ProcessResult(imm = infoMap, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = infoMap, tipeStatus = F, save = F, changed = T, time = 0)
       }
       sc.info = sc.info(numOfFiles = inputs.size)
       @pure def numOfLines(content: String): Z = {
@@ -321,7 +321,7 @@ object Stats {
         }
       }
       infoMap2 = infoMap + module.id ~> sc.info
-      return ProcessResult(imm = infoMap2, tipeStatus = F, save = F, changed = T)
+      return ProcessResult(imm = infoMap2, tipeStatus = F, save = F, changed = T, time = 0)
     }
   }
 
@@ -370,7 +370,7 @@ object Stats {
         else for (module <- workModules.elements) yield runModule(module)
 
       for (pair <- mvis) {
-        val (mid, RunResult(infoMap2, _, _)) = pair
+        val (mid, RunResult(infoMap2, _, _, _)) = pair
         infoMap = infoMap + mid ~> infoMap2.get(mid).get
       }
 

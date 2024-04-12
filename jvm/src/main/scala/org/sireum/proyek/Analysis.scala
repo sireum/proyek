@@ -116,7 +116,7 @@ object Analysis {
 
       if (!info.all && !info.config.interp && !force && checkFilePaths.isEmpty && changedFiles.isEmpty &&
         info.thMap.get(module.id).nonEmpty) {
-        return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F)
+        return ProcessResult(imm = info, tipeStatus = T, save = F, changed = F, time = 0)
       }
 
       val (inputs, nameMap, typeMap): (ISZ[FrontEnd.Input], Resolver.NameMap, Resolver.TypeMap) = {
@@ -155,7 +155,7 @@ object Analysis {
         val inputs = ops.ISZOps(for (p <- sourceFilePaths) yield toInput(info, Os.path(p)))
         if (inputs.s.isEmpty) {
           return ProcessResult(imm = info(uriMap = info.uriMap + module.id ~> HashMap.empty,
-            thMap = info.thMap + module.id ~> TypeHierarchy.empty(nameMap = nm, typeMap = tm)), tipeStatus = T, save = !isTipe, changed = T)
+            thMap = info.thMap + module.id ~> TypeHierarchy.empty(nameMap = nm, typeMap = tm)), tipeStatus = T, save = !isTipe, changed = T, time = 0)
         }
         val q = inputs.parMapFoldLeftCores((input: FrontEnd.Input) => input.parseGloballyResolve,
           FrontEnd.combineParseResult _, (ISZ[Message](), ISZ[AST.TopUnit.Program](), nm, tm), par)
@@ -176,7 +176,7 @@ object Analysis {
         info(uriMap = info.uriMap + module.id ~> map)
       }
       if (reporter.hasError) {
-        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T, time = 0)
       }
       var th = TypeHierarchy.build(T, TypeHierarchy(nameMap, typeMap, Poset.empty, HashSMap.empty), reporter)
       if (!reporter.hasError) {
@@ -199,7 +199,7 @@ object Analysis {
         vfus
       }
       if (reporter.hasError) {
-        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T, time = 0)
       }
       if (info2.verbose && verifyFileUriMap.nonEmpty) {
         println(
@@ -237,7 +237,7 @@ object Analysis {
       }
       th = TypeChecker.checkComponents(par, strictAliasing, th, nm, tm, reporter)
       if (reporter.hasError) {
-        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+        return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T, time = 0)
       }
       if (info2.sanityCheck) {
         for (name <- nm.keys) {
@@ -248,7 +248,7 @@ object Analysis {
         }
         PostTipeAttrChecker.checkNameTypeMaps(nm, tm, reporter)
         if (reporter.hasError) {
-          return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T)
+          return ProcessResult(imm = info2, tipeStatus = F, save = F, changed = T, time = 0)
         }
       }
       val newFiles = info2.files -- checkFilePaths
@@ -271,7 +271,7 @@ object Analysis {
         verifyFileUriMap
       }
       if (fileMap.isEmpty) {
-        return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
+        return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T, time = 0)
       }
       if (info3.verbose) {
         println(
@@ -279,6 +279,7 @@ object Analysis {
               |${(for (uri <- fileMap.keys) yield st"* ${Os.uriToPath(uri)}", "\n")}""".render)
       }
       val nameExePathMap = logika.Smt2Invoke.nameExePathMap(sireumHome)
+      val start = extension.Time.currentMillis
       Logika.checkTypedPrograms(
         verifyingStartTime = 0,
         fileSet = HashSSet.empty[String] ++ fileMap.keys,
@@ -297,7 +298,7 @@ object Analysis {
         skipTypes = info3.skipTypes,
         sources = for (p <- fileMap.entries) yield (Option.some(p._1), p._2)
       )
-      return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T)
+      return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T, time = extension.Time.currentMillis)
     }
   }
 
@@ -325,7 +326,7 @@ object Analysis {
           plugins: ISZ[Plugin],
           skipMethods: ISZ[String],
           skipTypes: ISZ[String],
-          reporter: Logika.Reporter): Z = {
+          reporter: Logika.Reporter): (Z, Z) = {
 
     val outDir = root / outDirName / (if (all && !verify) "tipe" else "logika")
     var info = Info(
@@ -351,6 +352,7 @@ object Analysis {
       println()
     }
 
+    var time: Z = 0
     while (modules.nonEmpty) {
       var nextModules = HashSMap.empty[String, B]
       var workModules = HashSMap.empty[String, B]
@@ -395,7 +397,8 @@ object Analysis {
 
       var tipe: B = T
       for (pair <- mvis) {
-        val (mid, RunResult(info2, t, changed)) = pair
+        val (mid, RunResult(info2, t, changed, tm)) = pair
+        time = time + tm
         workModules = workModules + mid ~> changed
         mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
         if (t) {
@@ -435,9 +438,9 @@ object Analysis {
     }
 
     if (reporter.hasError) {
-      return -1
+      return (-1, time)
     } else {
-      return 0
+      return (0, time)
     }
   }
 

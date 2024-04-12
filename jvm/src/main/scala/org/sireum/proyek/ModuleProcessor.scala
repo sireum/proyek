@@ -32,8 +32,8 @@ import org.sireum.message.Reporter
 import org.sireum.project.{DependencyManager, Module, ProjectUtil}
 
 object ModuleProcessor {
-  @datatype class ProcessResult[I](imm: I, tipeStatus: B, save: B, changed: B)
-  @datatype class RunResult[I](imm: I, tipeStatus: B, changed: B)
+  @datatype class ProcessResult[I](imm: I, tipeStatus: B, save: B, changed: B, time: Z)
+  @datatype class RunResult[I](imm: I, tipeStatus: B, changed: B, time: Z)
 }
 
 import ModuleProcessor._
@@ -140,13 +140,13 @@ import ModuleProcessor._
       fingerprintCache.removeAll()
     }
 
-    val ProcessResult(r, tipe, save, changed) = process(imm, mut, shouldProcess, changedFiles, dm, sourceInputs,
+    val ProcessResult(r, tipe, save, changed, time) = process(imm, mut, shouldProcess, changedFiles, dm, sourceInputs,
       testSourceInputs, reporter)
     if (save) {
       fingerprintCache.writeOver(Json.Printer.printHashMap(F, fingerprintMap, Json.Printer.printString _,
         Json.Printer.printString _).render)
     }
-    return RunResult(r, tipe, changed)
+    return RunResult(r, tipe, changed, time)
   }
 }
 
