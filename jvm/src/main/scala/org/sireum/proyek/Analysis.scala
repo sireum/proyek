@@ -298,7 +298,7 @@ object Analysis {
         skipTypes = info3.skipTypes,
         sources = for (p <- fileMap.entries) yield (Option.some(p._1), p._2)
       )
-      return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T, time = extension.Time.currentMillis)
+      return ProcessResult(imm = info3, tipeStatus = T, save = shouldProcess, changed = T, time = extension.Time.currentMillis - start)
     }
   }
 
@@ -396,9 +396,12 @@ object Analysis {
       }
 
       var tipe: B = T
+      var maxTime: Z = 0
       for (pair <- mvis) {
         val (mid, RunResult(info2, t, changed, tm)) = pair
-        time = time + tm
+        if (tm > maxTime) {
+          maxTime = tm
+        }
         workModules = workModules + mid ~> changed
         mapBox.value1 = mapBox.value1 + mid ~> info2.uriMap.get(mid).get
         if (t) {
@@ -408,6 +411,7 @@ object Analysis {
         }
         info = info(files = info.files -- (info.files.keys -- info2.files.keys))
       }
+      time = time + maxTime
       info = info(uriMap = mapBox.value1, thMap = mapBox.value2)
 
       for (p <- workModules.entries; childModule <- project.poset.childrenOf(p._1).elements) {
@@ -428,6 +432,7 @@ object Analysis {
       }
 
     }
+
 
     if (!all && files.nonEmpty && info.files.isEmpty) {
       mapBox.value2 = mapBox.value2 -- (mapBox.value2.keys -- seenModules.elements)
