@@ -144,6 +144,10 @@ object cli {
         tpe = Type.Str(None(), None()),
         description = "The assembled jar filename (defaults to the project name)"
       ),
+      Opt(name = "noDeps", longKey = "no-deps", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Exclude library dependencies"
+      ),
       Opt(name = "mainClass", longKey = "main", shortKey = Some('m'),
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"

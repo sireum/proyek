@@ -83,6 +83,7 @@ object Assemble {
           project: Project,
           projectName: String,
           jarName: String,
+          noDeps: B,
           dm: DependencyManager,
           mainClassNameOpt: Option[String],
           isNative: B,
@@ -126,12 +127,14 @@ object Assemble {
       }
     }
 
-    for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
-      Os.path(lib.main).unzipTo(contentDir)
-      if (includeSources) {
-        lib.sourcesOpt match {
-          case Some(src) => Os.path(src).unzipTo(contentDir)
-          case _ =>
+    if (!noDeps) {
+      for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
+        Os.path(lib.main).unzipTo(contentDir)
+        if (includeSources) {
+          lib.sourcesOpt match {
+            case Some(src) => Os.path(src).unzipTo(contentDir)
+            case _ =>
+          }
         }
       }
     }
