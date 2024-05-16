@@ -535,47 +535,10 @@ object Ive {
         println(s"Wrote $editorFontXml")
       }
 
-      def writeAppXml(): Unit = {
-        val appXml = (configPath.up / "system" / "workspace" / "app.xml").canon
-        val smtlib2Option = """<option name="name" value="smtlib2" />"""
-        val sysmlv2Option = """<option name="name" value="sysmlv2" />"""
-        val aadlv2Option = """<option name="name" value="aadlv2" />"""
-
-        def cleanAppXml(): Unit = {
-          appXml.up.mkdirAll()
-          appXml.writeOver(
-            st"""<application>
-                |  <component name="TextMateSettings">
-                |    <bundles>
-                |      <BundleConfigBean>
-                |        $smtlib2Option
-                |        <option name="path" value="${sireumHome / "resources" / "textmate" / "smt2"}" />
-                |      </BundleConfigBean>
-                |    </bundles>
-                |  </component>
-                |</application>""".render
-          )
-          println(s"Wrote $appXml")
-        }
-
-        if (!appXml.exists) {
-          cleanAppXml()
-          return
-        }
-
-        val appXmlContentOps = ops.StringOps(appXml.read)
-        if (appXmlContentOps.contains(smtlib2Option) && appXmlContentOps.contains(sysmlv2Option) &&
-          appXmlContentOps.contains(aadlv2Option)) {
-          return
-        }
-        cleanAppXml()
-      }
-
       writeJdkTable()
       writeFileTypes()
       writeColors()
       writeScala()
-      writeAppXml()
       writeEditorFont()
 
       sandboxPath.mkdirAll()
