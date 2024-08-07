@@ -167,8 +167,8 @@ object Ive {
       def writeModule(m: Module): Unit = {
         moduleEntries = moduleEntries :+
           st"""<module fileurl="file://$$PROJECT_DIR$$/.idea/modules/${m.id}.iml" filepath="$$PROJECT_DIR$$${Os.fileSep}.idea${Os.fileSep}modules${Os.fileSep}${m.id}.iml" />"""
-        val deps: ISZ[ST] = for (dep <- m.deps) yield
-          st"""<orderEntry type="module" module-name="$dep" exported="" />"""
+        val deps: ISZ[ST] = for (dep <- project.poset.ancestorsOf(m.id).elements) yield
+          st"""<orderEntry type="module" module-name="$dep" />"""
         val sources: ISZ[ST] = for (src <- ProjectUtil.moduleSources(m)) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, src)}" isTestSource="false" />"""
         val resources: ISZ[ST] = for (rsc <- ProjectUtil.moduleResources(m)) yield
@@ -177,8 +177,8 @@ object Ive {
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, src)}" isTestSource="true" />"""
         val testResources: ISZ[ST] = for (rsc <- ProjectUtil.moduleTestResources(m)) yield
           st"""<sourceFolder url="file://$$MODULE_DIR$$/../../${relUri(path, rsc)}" type="java-test-resource" />"""
-        var libs: ISZ[ST] = for (lib <- dm.fetchDiffLibs(m)) yield
-          st"""<orderEntry type="library" exported="" name="${lib.name}" level="project" />"""
+        var libs: ISZ[ST] = for (lib <- dm.fetchTransitiveLibs(m)) yield
+          st"""<orderEntry type="library" name="${lib.name}" level="project" />"""
 
         var ancestorHasTest = F
         for (superm <- dm.computeTransitiveDeps(m) if ProjectUtil.moduleTestSources(project.modules.get(superm).get).nonEmpty) {
