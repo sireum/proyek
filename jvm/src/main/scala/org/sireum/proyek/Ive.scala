@@ -453,10 +453,8 @@ object Ive {
               |  </component>
               |</application>"""
 
-        if (jdkTableXml.up.isWritable) {
-          jdkTableXml.writeOver(table.render)
-          println(s"Wrote $jdkTableXml")
-        }
+        jdkTableXml.writeOver(table.render)
+        println(s"Wrote $jdkTableXml")
       }
 
       def writeFileTypes(): Unit = {
@@ -464,20 +462,18 @@ object Ive {
         if (!force && fileTypesXml.exists) {
           return
         }
-        if (fileTypesXml.up.isWritable) {
-          fileTypesXml.writeOver(
-            st"""<application>
-                |  <component name="FileTypeManager" version="18">
-                |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;rust;z3;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc" />
-                |    <extensionMap>
-                |      <mapping ext="cmd" type="Scala Worksheet" />
-                |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
-                |    </extensionMap>
-                |  </component>
-                |</application>""".render
-          )
-          println(s"Wrote $fileTypesXml")
-        }
+        fileTypesXml.writeOver(
+          st"""<application>
+              |  <component name="FileTypeManager" version="18">
+              |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;rust;z3;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc" />
+              |    <extensionMap>
+              |      <mapping ext="cmd" type="Scala Worksheet" />
+              |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
+              |    </extensionMap>
+              |  </component>
+              |</application>""".render
+        )
+        println(s"Wrote $fileTypesXml")
       }
 
       def writeColors(): Unit = {
@@ -486,21 +482,19 @@ object Ive {
           if (!force && f.exists) {
             return
           }
-          if (f.up.isWritable) {
-            f.writeOver(
-              st"""<scheme name="_@user_$name" version="142" parent_scheme="$name">
-                  |  <attributes>
-                  |    <option name="DEPRECATED_ATTRIBUTES">
-                  |      <value>
-                  |        <option name="EFFECT_TYPE" value="3" />
-                  |      </value>
-                  |    </option>
-                  |  </attributes>
-                  |</scheme>
-                  |""".render
-            )
-            println(s"Wrote $f")
-          }
+          f.writeOver(
+            st"""<scheme name="_@user_$name" version="142" parent_scheme="$name">
+                |  <attributes>
+                |    <option name="DEPRECATED_ATTRIBUTES">
+                |      <value>
+                |        <option name="EFFECT_TYPE" value="3" />
+                |      </value>
+                |    </option>
+                |  </attributes>
+                |</scheme>
+                |""".render
+          )
+          println(s"Wrote $f")
         }
       }
 
@@ -509,25 +503,23 @@ object Ive {
         if (!force && fileTypesXml.exists) {
           return
         }
-        if (fileTypesXml.up.isWritable) {
-          fileTypesXml.writeOver(
-            st"""<application>
-                |  <component name="ScalaSettings">
-                |    <option name="SHOW_TYPE_TOOLTIP_ON_MOUSE_HOVER" value="true" />
-                |    <option name="COMPILE_SERVER_SDK" value="Project Default" />
-                |    <option name="COMPILE_SERVER_MAXIMUM_HEAP_SIZE" value="2048" />
-                |    <option name="COMPILE_SERVER_JVM_PARAMETERS" value="-server -Xss2m -XX:MaxInlineLevel=20" />
-                |    <option name="COMPILE_SERVER_PARALLELISM" value="4" />
-                |  </component>
-                |</application>""".render
-          )
-          println(s"Wrote $fileTypesXml")
-        }
+        fileTypesXml.writeOver(
+          st"""<application>
+              |  <component name="ScalaSettings">
+              |    <option name="SHOW_TYPE_TOOLTIP_ON_MOUSE_HOVER" value="true" />
+              |    <option name="COMPILE_SERVER_SDK" value="Project Default" />
+              |    <option name="COMPILE_SERVER_MAXIMUM_HEAP_SIZE" value="2048" />
+              |    <option name="COMPILE_SERVER_JVM_PARAMETERS" value="-server -Xss2m -XX:MaxInlineLevel=20" />
+              |    <option name="COMPILE_SERVER_PARALLELISM" value="4" />
+              |  </component>
+              |</application>""".render
+        )
+        println(s"Wrote $fileTypesXml")
       }
 
       def writeEditorFont(): Unit = {
         val editorFontXml = configOptions / "editor-font.xml"
-        if (!editorFontXml.exists && editorFontXml.up.isWritable) {
+        if (!editorFontXml.exists) {
           editorFontXml.writeOver(
             st"""<application>
                 |  <component name="DefaultFont">
@@ -539,8 +531,8 @@ object Ive {
                 |  </component>
                 |</application>""".render
           )
-          println(s"Wrote $editorFontXml")
         }
+        println(s"Wrote $editorFontXml")
       }
 
       writeJdkTable()
