@@ -45,9 +45,9 @@ object Proyek {
 
   @pure def normalizePath(path: String): String = {
     if (Os.isWin) {
-      return path
-    } else {
       return ops.StringOps(path).replaceAllChars('\\', '/')
+    } else {
+      return path
     }
   }
 
