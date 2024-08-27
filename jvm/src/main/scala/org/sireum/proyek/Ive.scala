@@ -642,7 +642,7 @@ object Ive {
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
-            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_21" project-jdk-name="Java" project-jdk-type="JavaSDK">
+            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" project-jdk-name="Java" project-jdk-type="JavaSDK">
             |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
             |  </component>
             |</project>
