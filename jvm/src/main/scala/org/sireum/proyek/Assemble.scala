@@ -80,6 +80,38 @@ object Assemble {
     st"--initialize-at-run-time=${(graalRtPackagesOrClasses, ",")}".render
   )
 
+  def nativ(sireumHome: Os.Path, jar: Os.Path): Z = {
+    val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
+      case Os.Kind.Mac => ("mac", ISZ())
+      case Os.Kind.Linux => ("linux", ISZ())
+      case Os.Kind.LinuxArm => ("linux/arm", ISZ())
+      case Os.Kind.Win => ("win", ISZ("-H:NativeLinkerOption=Winhttp.lib"))
+      case _ => halt("Unsupported operating system")
+    }
+    val homeBin = sireumHome / "bin"
+    (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
+
+    println()
+    println("Building native ...")
+    val tempJar = Os.temp()
+    jar.copyOverTo(tempJar)
+    tempJar.removeOnExit()
+    Asm.eraseNonNative(jar)
+    val platDir = homeBin / platformKind
+    val dir = jar.up.canon
+    val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
+    val jarName = ops.StringOps(jar.name).substring(0, jar.name.size - 4)
+    val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
+      ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr.run()
+    tempJar.copyOverTo(jar)
+    if (r.exitCode != 0) {
+      eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
+      eprintln(r.out)
+      eprintln(r.err)
+    }
+    return r.exitCode
+  }
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -203,34 +235,7 @@ object Assemble {
     }
 
     if (isNative) {
-      val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
-        case Os.Kind.Mac => ("mac", ISZ())
-        case Os.Kind.Linux => ("linux", ISZ())
-        case Os.Kind.LinuxArm => ("linux/arm", ISZ())
-        case Os.Kind.Win => ("win", ISZ("-H:NativeLinkerOption=Winhttp.lib"))
-        case _ => halt("Unsupported operating system")
-      }
-      val homeBin = dm.sireumHome / "bin"
-      (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
-
-      println()
-      println("Building native ...")
-      val tempJar = Os.temp()
-      jar.copyOverTo(tempJar)
-      tempJar.removeOnExit()
-      Asm.eraseNonNative(jar)
-      val platDir = homeBin / platformKind
-      val dir = jar.up.canon
-      val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
-      val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
-        ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr.run()
-      tempJar.copyOverTo(jar)
-      if (r.exitCode != 0) {
-        eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
-        eprintln(r.out)
-        eprintln(r.err)
-      }
-      return r.exitCode
+      nativ(dm.sireumHome, jar)
     }
 
     return 0
