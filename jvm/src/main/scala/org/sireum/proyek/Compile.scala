@@ -303,10 +303,10 @@ object Compile {
     }
 
     val scalaLib = scalaHome / "lib" / "scala-library.jar"
-    var scalaArgs = ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render)
-    scalaArgs = scalaArgs :+ "-d" :+ outDir.string
-    var javaArgs = ISZ[String]("-classpath", st"${(scalaLib +: classpath, Os.pathSep)}".render)
-    javaArgs = javaArgs :+ "-d" :+ outDir.string
+    var scalaArgs = ISZ[String]("-classpath", st""""${(classpath, Os.pathSep)}"""".render)
+    scalaArgs = scalaArgs :+ "-d" :+ s""""$outDir""""
+    var javaArgs = ISZ[String]("-classpath", ops.StringOps(st""""${(scalaLib +: classpath, Os.pathSep)}"""".render).replaceAllLiterally("\\", "\\\\"))
+    javaArgs = javaArgs :+ "-d" :+ ops.StringOps(s""""$outDir"""").replaceAllLiterally("\\", "\\\\")
 
     var ok = T
     var sb = ISZ[ST]()
@@ -345,19 +345,27 @@ object Compile {
 
     if (numOfSlangFiles > 0 || numOfScalaFiles > 0) {
       val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
-      scalaArgs = scalaArgs ++ scalacOptions
-      scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield f.string)
+      scalaArgs = scalaArgs ++ (for (opt <- scalacOptions) yield s""""$opt"""")
+      scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield s""""$f"""")
 
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      var env = ISZ[(String, String)]("PROYEK_JFX" ~> (javaHome / "lib" / "javafx.properties").exists.string)
+      var env = ISZ[(String, String)](
+        "PROYEK_JFX" ~> (javaHome / "lib" / "javafx.properties").exists.string,
+        "JAVA_HOME" ~> "",
+        "PATH" ~> (
+          if (Os.isWin) s""""$javaHome${Os.fileSep}bin"${Os.pathSep}"$scalaHome${Os.fileSep}bin"${Os.pathSep}${Os.env("PATH").get}"""
+          else s"""$javaHome${Os.fileSep}bin${Os.pathSep}$scalaHome${Os.fileSep}bin${Os.pathSep}${Os.env("PATH").get}"""
+        )
+      )
       if (isJs) {
         env = env :+ (("PROYEK_JS", "true"))
       }
       if (Os.env("JAVA_OPTS").isEmpty) {
         env = env :+ "JAVA_OPTS" ~> " "
       }
-      val r = proc"$scalac @${argFile.name}".env(env).at(argFile.up.canon).run()
+      val r = (if (Os.isWin) proc"cmd /C ${scalac.name} @${argFile.name}"
+      else Os.proc(ISZ("bash", "-c", s"${scalac.name} @${argFile.name}"))).env(env).at(argFile.up.canon).run()
       ok = r.ok
       sb = sb :+ st"${r.out}"
       sb = sb :+ st"${r.err}"
@@ -365,12 +373,12 @@ object Compile {
 
     if (ok) {
       if (javaSources.nonEmpty) {
-        javaArgs = javaArgs ++ javacOptions
-        javaArgs = javaArgs ++ javaSources
+        javaArgs = javaArgs ++ (for (opt <- javacOptions) yield ops.StringOps(s""""$opt"""").replaceAllLiterally("\\", "\\\\"))
+        javaArgs = javaArgs ++ (for (f <- javaSources) yield ops.StringOps(s""""$f"""").replaceAllLiterally("\\", "\\\\"))
         val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
         val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
-        val r = proc"$javac @${argFile.name}".at(argFile.up.canon).run()
+        val r = proc"${javac.name} @${argFile.name}".at(argFile.up.canon).run()
         sb = sb :+ st"${r.out}"
         sb = sb :+ st"${r.err}"
         return (r.ok, st"${(sb, "")}".render)
