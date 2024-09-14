@@ -205,6 +205,25 @@ object cli {
     )
   )
 
+  val exportTool: Tool = Tool(
+    name = "export",
+    command = "export",
+    description = "Sireum proyek exporter",
+    header = "Sireum Proyek Exporter",
+    usage = "<options>* <dir>",
+    usageDescOpt = None(),
+    opts = commonCompileOpts ++ ISZ(
+      Opt(name = "target", longKey = "target", shortKey = None(),
+        tpe = Type.Choice(name = "buildTool", sep = Some(','), elements = ISZ("bloop", "mill")),
+        description = "Build tool target"
+      )
+    ),
+    groups = ISZ(
+      projectOptGroup
+    )
+  )
+
+
   val iveTool: Tool = Tool(
     name = "ive",
     command = "ive",
@@ -235,6 +254,7 @@ object cli {
       ivyOptGroup
     )
   )
+
 
   val slangCheckProyekTool: Tool = Tool(
     name = "slangcheck",
@@ -285,8 +305,6 @@ object cli {
       ivyOptGroup
     ) ++ org.sireum.logika.cli.logikaVerifier.groups
   )
-
-
 
 
   val publishTool: Tool = Tool(
@@ -425,8 +443,8 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, depTool, iveTool, logikaProyekTool, publishTool, runTool, slangCheckProyekTool, statsTool, testTool,
-      tipeProyekTool)
+    subs = ISZ(assembleTool, compileTool, depTool, exportTool, iveTool, logikaProyekTool, publishTool, runTool,
+      slangCheckProyekTool, statsTool, testTool, tipeProyekTool)
   )
 
 }
