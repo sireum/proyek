@@ -106,7 +106,7 @@ object cli {
       description = "Module IDs to force recompilation on"
     ),
     Opt(name = "scalac", longKey = "scalac", shortKey = None(),
-      tpe = Type.Str(Some(','), Some("-release, 17, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Xfatal-warnings, -language:postfixOps")),
+      tpe = Type.Str(Some(','), Some("-release, 17, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Xfatal-warnings, -language:postfixOps, -Wconf:cat=scala3-migration&msg=legacy-binding^msg=symbol^msg=outer:s")),
       description = "Scalac options"
     ),
     Opt(name = "sha3", longKey = "sha3", shortKey = None(),
@@ -152,6 +152,10 @@ object cli {
         tpe = Type.Str(None(), None()),
         description = "The main class fully qualified name"
       ),
+      Opt(name = "meta", longKey = "meta", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Generate Scalameta semanticdb"
+      ),
       Opt(name = "isNative", longKey = "native", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Generates native image"
@@ -179,6 +183,10 @@ object cli {
       Opt(name = "js", longKey = "js", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Compile using Scala.js"
+      ) :+
+      Opt(name = "meta", longKey = "meta", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Generate Scalameta semanticdb"
       ),
     groups = ISZ(
       projectOptGroup,

@@ -51,7 +51,8 @@ object Compile {
                                 val javacOptions: ISZ[String],
                                 val scalacOptions: ISZ[String],
                                 val scalacPlugin: Os.Path,
-                                val isJs: B) extends proyek.ModuleProcessor[(CompileStatus.Type, String), B] {
+                                val isJs: B,
+                                val genSemanticsDB: B) extends proyek.ModuleProcessor[(CompileStatus.Type, String), B] {
 
     @pure override def fileFilter(ignore: (CompileStatus.Type, String), file: Os.Path): B = {
       var r: B = file.ext == "scala"
@@ -84,6 +85,10 @@ object Compile {
         )
 
       var plugins = ISZ(scalacPlugin)
+      if (genSemanticsDB) {
+        plugins = plugins :+
+          dm.fetch(ISZ(s"org.scalameta:semanticdb-scalac_${dm.scalaVersion}:${dm.versions.get("org.scalameta::scalameta::").get}"))(0).path
+      }
       if (isJs) {
         plugins = plugins :+
           dm.fetch(ISZ(s"${DependencyManager.scalaJsCompilerKey}${dm.scalaJsVersion}"))(0).path
@@ -146,6 +151,11 @@ object Compile {
 
   }
 
+  @pure def filterOptionsForMeta(opts: ISZ[String]): ISZ[String] = {
+    val ignoreOptions = HashSet ++ ISZ[String]("-Xfatal-warnings")
+    return for (opt <- opts if !ignoreOptions.contains(opt)) yield opt
+  }
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -154,6 +164,7 @@ object Compile {
           javacOptions: ISZ[String],
           scalacOptions: ISZ[String],
           isJs: B,
+          genSemanticsDB: B,
           followSymLink: B,
           fresh: B,
           par: Z,
@@ -223,6 +234,9 @@ object Compile {
     var modules: ISZ[(String, B)] = for (n <- project.poset.rootNodes) yield (n, compileAll)
     var compiledModuleIds = HashSet.empty[String]
     val recompileIds = HashSet ++ recompileModuleIds
+    val scalacOpts: ISZ[String] =
+      if (genSemanticsDB) (HashSSet ++ filterOptionsForMeta(scalacOptions) + "-Yrangepos").elements
+      else scalacOptions
     while (modules.nonEmpty) {
       var nexts = ISZ[(Module, B)]()
       var newModules = HashSMap.empty[String, B]
@@ -254,9 +268,10 @@ object Compile {
           javaHome = dm.javaHome,
           scalaHome = dm.scalaHome,
           javacOptions = javacOptions,
-          scalacOptions = scalacOptions,
+          scalacOptions = scalacOpts,
           scalacPlugin = dm.scalacPlugin,
-          isJs = isJs
+          isJs = isJs,
+          genSemanticsDB = genSemanticsDB
         ).run((CompileStatus.Compiled, ""), T, dm, HashSMap.empty, message.Reporter.create)
         val r = ops.ISZOps(nexts).mParMapCores(compileModule, par)
         var ok = T
