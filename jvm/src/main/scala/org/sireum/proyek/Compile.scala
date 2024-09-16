@@ -151,11 +151,6 @@ object Compile {
 
   }
 
-  @pure def filterOptionsForMeta(opts: ISZ[String]): ISZ[String] = {
-    val ignoreOptions = HashSet ++ ISZ[String]("-Xfatal-warnings")
-    return for (opt <- opts if !ignoreOptions.contains(opt)) yield opt
-  }
-
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -235,7 +230,7 @@ object Compile {
     var compiledModuleIds = HashSet.empty[String]
     val recompileIds = HashSet ++ recompileModuleIds
     val scalacOpts: ISZ[String] =
-      if (genSemanticsDB) (HashSSet ++ filterOptionsForMeta(scalacOptions) + "-Yrangepos").elements
+      if (genSemanticsDB) (HashSSet ++ scalacOptions + "-Yrangepos").elements
       else scalacOptions
     while (modules.nonEmpty) {
       var nexts = ISZ[(Module, B)]()
