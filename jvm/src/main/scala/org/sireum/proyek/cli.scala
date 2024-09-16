@@ -106,7 +106,7 @@ object cli {
       description = "Module IDs to force recompilation on"
     ),
     Opt(name = "scalac", longKey = "scalac", shortKey = None(),
-      tpe = Type.Str(Some(','), Some("-release, 17, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Xfatal-warnings, -language:postfixOps, -Wconf:cat=scala3-migration&msg=legacy-binding^msg=symbol^msg=outer:s")),
+      tpe = Type.Str(Some(','), Some("-release, 17, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Werror, -language:postfixOps, -Wconf:cat=scala3-migration:s, -Wconf:msg=legacy-binding:s, -Wconf:msg=symbol:s, -Wconf:msg=outer:s")),
       description = "Scalac options"
     ),
     Opt(name = "sha3", longKey = "sha3", shortKey = None(),
