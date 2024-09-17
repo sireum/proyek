@@ -89,7 +89,6 @@ object Assemble {
       case _ => halt("Unsupported operating system")
     }
     val homeBin = sireumHome / "bin"
-    (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
 
     println()
     println("Building native ...")
@@ -100,6 +99,9 @@ object Assemble {
     val platDir = homeBin / platformKind
     val dir = jar.up.canon
     val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
+    if (!nativeImage.exists) {
+      (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
+    }
     val jarName = ops.StringOps(jar.name).substring(0, jar.name.size - 4)
     val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
       ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr.run()
