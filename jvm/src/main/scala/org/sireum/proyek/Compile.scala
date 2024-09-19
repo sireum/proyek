@@ -353,6 +353,20 @@ object Compile {
       case (_, _, _) => sb = sb :+ st"* Compiled $numOfSlangFiles Slang, $numOfScalaFiles Scala, and $numOfJavaFiles Java $mid $category source files\n"
     }
 
+    var env = ISZ[(String, String)](
+      "PROYEK_JFX" ~> (javaHome / "lib" / "javafx.properties").exists.string,
+      "JAVA_HOME" ~> "",
+      "PATH" ~> (
+        if (Os.isWin) s""""$javaHome${Os.fileSep}bin"${Os.pathSep}"$scalaHome${Os.fileSep}bin"${Os.pathSep}${Os.env("PATH").get}"""
+        else s"""$javaHome${Os.fileSep}bin${Os.pathSep}$scalaHome${Os.fileSep}bin${Os.pathSep}${Os.env("PATH").get}"""
+        )
+    )
+    if (isJs) {
+      env = env :+ (("PROYEK_JS", "true"))
+    }
+    if (Os.env("JAVA_OPTS").isEmpty) {
+      env = env :+ "JAVA_OPTS" ~> " "
+    }
     if (numOfSlangFiles > 0 || numOfScalaFiles > 0) {
       val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
       scalaArgs = scalaArgs ++ (for (opt <- scalacOptions) yield s""""$opt"""")
@@ -360,20 +374,6 @@ object Compile {
 
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      var env = ISZ[(String, String)](
-        "PROYEK_JFX" ~> (javaHome / "lib" / "javafx.properties").exists.string,
-        "JAVA_HOME" ~> "",
-        "PATH" ~> (
-          if (Os.isWin) s""""$javaHome${Os.fileSep}bin"${Os.pathSep}"$scalaHome${Os.fileSep}bin"${Os.pathSep}${Os.env("PATH").get}"""
-          else s"""$javaHome${Os.fileSep}bin${Os.pathSep}$scalaHome${Os.fileSep}bin${Os.pathSep}${Os.env("PATH").get}"""
-        )
-      )
-      if (isJs) {
-        env = env :+ (("PROYEK_JS", "true"))
-      }
-      if (Os.env("JAVA_OPTS").isEmpty) {
-        env = env :+ "JAVA_OPTS" ~> " "
-      }
       val r = (if (Os.isWin) proc"cmd /C ${scalac.name} @${argFile.name}"
       else Os.proc(ISZ("bash", "-c", s"${scalac.name} @${argFile.name}"))).env(env).at(argFile.up.canon).run()
       ok = r.ok
@@ -388,7 +388,8 @@ object Compile {
         val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
         val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
-        val r = proc"${javac.name} @${argFile.name}".at(argFile.up.canon).run()
+        val r = (if (Os.isWin) proc"cmd /C ${javac.name} @${argFile.name}"
+        else Os.proc(ISZ("bash", "-c", s"${javac.name} @${argFile.name}"))).env(env).at(argFile.up.canon).run()
         sb = sb :+ st"${r.out}"
         sb = sb :+ st"${r.err}"
         return (r.ok, st"${(sb, "")}".render)
