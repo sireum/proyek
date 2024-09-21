@@ -98,9 +98,15 @@ object Assemble {
     Asm.eraseNonNative(jar)
     val platDir = homeBin / platformKind
     val dir = jar.up.canon
-    val nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
+    var nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
     if (!nativeImage.exists) {
-      (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
+      val javaHome = Os.javaHomeOpt(Os.kind, Some(sireumHome)).get
+      val nik = javaHome / "bin" / nativeImage.name
+      if (nik.exists) {
+        nativeImage = nik
+      } else {
+        (homeBin / "install" / "graal.cmd").call(ISZ()).console.runCheck()
+      }
     }
     val jarName = ops.StringOps(jar.name).substring(0, jar.name.size - 4)
     val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
