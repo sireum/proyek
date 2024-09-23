@@ -120,7 +120,8 @@ object AnalysisTest {
       javaHome = javaHome,
       scalaHome = scalaHome,
       sireumHome = sireumHome,
-      cacheOpt = None()
+      cacheOpt = None(),
+      proxy = Coursier.Proxy.empty
     )
 
     val test1Lmp: ModuleProcessor = ModuleProcessor(

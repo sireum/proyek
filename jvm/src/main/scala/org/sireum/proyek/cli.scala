@@ -42,6 +42,30 @@ object cli {
         tpe = Type.Flag(T),
         description = "Disable retrieval of javadoc files from Ivy dependencies"
       ),
+      Opt(name = "proxyHost", longKey = "proxy-host", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy host for ivy resolution"
+      ),
+      Opt(name = "proxyNonHosts", longKey = "proxy-hosts", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy non-hosts for ivy resolution"
+      ),
+      Opt(name = "proxyPort", longKey = "proxy-port", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy port for ivy resolution"
+      ),
+      Opt(name = "proxyProtocol", longKey = "proxy-protocol", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy protocol for ivy resolution"
+      ),
+      Opt(name = "proxyUser", longKey = "proxy-user-env", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy user environment variable for ivy resolution"
+      ),
+      Opt(name = "proxyPassword", longKey = "proxy-passwd-env", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Proxy password environment variable for ivy resolution"
+      ),
       Opt(name = "sources", longKey = "no-sources", shortKey = None(),
         tpe = Type.Flag(T),
         description = "Disable retrieval of source files from Ivy dependencies"
