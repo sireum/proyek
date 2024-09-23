@@ -268,7 +268,7 @@ object Ive {
 
     writeLibraries()
     writeModules()
-    IVE.writeMisc(dotIdea, outDirName)
+    IVE.writeMisc(dotIdea, outDirName, javacOptions)
     IVE.writeCodeStyles(dotIdea)
     IVE.writeCompiler(dotIdea, javacOptions)
     IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, scalacOptions)
@@ -468,7 +468,7 @@ object Ive {
           fileTypesXml.writeOver(
             st"""<application>
                 |  <component name="FileTypeManager" version="18">
-                |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;rust;z3;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc;VSCodium.app;vscodium;Brave Browser.app;brave" />
+                |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;cargo;rustup;rustrover;z3;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc;VSCodium.app;vscodium;Brave Browser.app;brave" />
                 |    <extensionMap>
                 |      <mapping ext="cmd" type="Scala Worksheet" />
                 |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
@@ -637,12 +637,24 @@ object Ive {
       }
     }
 
-    def writeMisc(dotIdea: Os.Path, outDirName: String): Unit = {
+    def writeMisc(dotIdea: Os.Path, outDirName: String, javacOptions: ISZ[String]): Unit = {
+      var javaVersion: String = "17"
+      var i = 0
+      while (i < javacOptions.size) {
+        if (i + 1 < javacOptions.size) {
+          javacOptions(i) match {
+            case string"release" => javaVersion = javacOptions(i + 1)
+            case string"source" => javaVersion = javacOptions(i + 1)
+            case _ =>
+          }
+        }
+        i = i + 1
+      }
       val f = dotIdea / "misc.xml"
       f.writeOver(
         st"""<?xml version="1.0" encoding="UTF-8"?>
             |<project version="4">
-            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" project-jdk-name="Java" project-jdk-type="JavaSDK">
+            |  <component name="ProjectRootManager" version="2" languageLevel="JDK_$javaVersion" project-jdk-name="Java" project-jdk-type="JavaSDK">
             |    <output url="file://$$PROJECT_DIR$$/$outDirName" />
             |  </component>
             |</project>
