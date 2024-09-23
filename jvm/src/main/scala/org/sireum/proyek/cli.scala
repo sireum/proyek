@@ -46,7 +46,7 @@ object cli {
         tpe = Type.Str(sep = None(), default = None()),
         description = "Proxy host for ivy resolution"
       ),
-      Opt(name = "proxyNonHosts", longKey = "proxy-hosts", shortKey = None(),
+      Opt(name = "proxyNonHosts", longKey = "proxy-non-hosts", shortKey = None(),
         tpe = Type.Str(sep = None(), default = None()),
         description = "Proxy non-hosts for ivy resolution"
       ),
