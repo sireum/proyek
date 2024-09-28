@@ -371,6 +371,64 @@ object cli {
   )
 
 
+  val reflectGenProyekTool: Tool = Tool(
+    name = "reflect",
+    command = "reflect",
+    description = "Slang proyek reflection generator",
+    header = "Sireum Proyek Reflection Generator",
+    usage = "<options>* <dir>",
+    usageDescOpt = None(),
+    opts = ISZ(
+      Opt(
+        name = "className", longKey = "class", shortKey = None(),
+          tpe = Type.Str(sep = None(), default = Some("StaticReflection")),
+        description = "Class name"
+      ),
+      Opt(
+        name = "includePackages", longKey = "include-packages", shortKey = None(),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Package names to include (includes all by default)"
+      ),
+      Opt(
+        name = "include", longKey = "include", shortKey = None(),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Object or type names to include (includes all in each package by default)"
+      ),
+      Opt(
+        name = "excludePackages", longKey = "exclude-packages", shortKey = None(),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Package names to exclude (excludes none by default)"
+      ),
+      Opt(
+        name = "exclude", longKey = "exclude", shortKey = None(),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Object or type names to exclude (exclude none by default)"
+      ),
+      Opt(
+        name = "license", longKey = "license", shortKey = None(),
+        tpe = Type.Path(multiple = F, default = None()),
+        description = "License file"
+      ),
+      Opt(
+        name = "packageName", longKey = "package", shortKey = None(),
+        tpe = Type.Str(sep = None(), default = None()),
+        description = "Package name"
+      ),
+      Opt(
+        name = "output", longKey = "output", shortKey = None(),
+        tpe = Type.Path(multiple = F, default = None()),
+        description = "Output directory"
+      ),
+      org.sireum.logika.cli.parOpt,
+      org.sireum.lang.cli.strictAliasingOpt,
+      org.sireum.lang.cli.verboseOpt
+    ),
+    groups = ISZ(
+      projectOptGroup
+    )
+  )
+
+
   val runTool: Tool = Tool(
     name = "run",
     command = "run",
@@ -464,8 +522,7 @@ object cli {
       org.sireum.lang.cli.verboseOpt
     ),
     groups = ISZ(
-      projectOptGroup,
-      ivyOptGroup
+      projectOptGroup
     )
   )
 
@@ -475,8 +532,8 @@ object cli {
     description = "Build tools",
     header = "Sireum Proyek: Build Tools for Slang Projects",
     unlisted = F,
-    subs = ISZ(assembleTool, compileTool, depTool, exportTool, iveTool, logikaProyekTool, publishTool, runTool,
-      slangCheckProyekTool, statsTool, testTool, tipeProyekTool)
+    subs = ISZ(assembleTool, compileTool, depTool, exportTool, iveTool, logikaProyekTool, publishTool,
+      reflectGenProyekTool, runTool, slangCheckProyekTool, statsTool, testTool, tipeProyekTool)
   )
 
 }
