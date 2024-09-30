@@ -74,7 +74,6 @@ object Assemble {
   val graalOpts: ISZ[String] = ISZ[String](
     "--initialize-at-build-time",
     "--enable-url-protocols=https",
-    "--report-unsupported-elements-at-runtime",
     "--no-fallback",
     "-H:+ReportExceptionStackTraces",
     st"--initialize-at-run-time=${(graalRtPackagesOrClasses, ",")}".render
