@@ -32,15 +32,17 @@ import org.sireum.lang.symbol.Resolver.{NameMap, TypeMap}
 
 object Reflect {
   val maxParams: Z = 247
+  val anyName: String = "Any"
+  val anyRefName: String = "AnyRef"
 
   def gen(packageNameOpt: Option[String], className: String, outputOpt: Option[Os.Path], nameMap: NameMap,
           typeMap: TypeMap, includedPackages: HashSet[ISZ[String]], excludedPackages: HashSet[ISZ[String]],
           included: HashSet[ISZ[String]], excluded: HashSet[ISZ[String]], licenseOpt: Option[String]): Unit = {
 
     @strictpure def methodMapST(i: Z, puts: ISZ[ST]): ST = {
-      val argTypes: ISZ[String] = for (_ <- 0 until i) yield " => Any"
-      st"""private lazy val method${i}Map: Long2ObjectOpenHashMap[Option[AnyRef]$argTypes => Any] = {
-          |  val r = new Long2ObjectOpenHashMap[Option[AnyRef]$argTypes => Any](${puts.size})
+      val argTypes: ISZ[ST] = for (_ <- 0 until i) yield st" => $anyName"
+      st"""private lazy val method${i}Map: Long2ObjectOpenHashMap[Option[$anyRefName]$argTypes => $anyName] = {
+          |  val r = new Long2ObjectOpenHashMap[Option[$anyRefName]$argTypes => $anyName](${puts.size})
           |  ${(puts, "\n")}
           |  r
           |}"""
@@ -50,14 +52,14 @@ object Reflect {
       val ts: ISZ[ST] = for (j <- 0 until i) yield st", T${j + 1}"
       val argDecls: ISZ[ST] = for (j <- 0 until i) yield st", o${j + 1}: T${j + 1}"
       val args: ISZ[ST] = for (j <- 0 until i) yield st"(o${j + 1})"
-      st"""override def invoke$i[T$ts, R](owner: String, name: String, receiverOpt: Option[T]$argDecls): R = {
-          |  val f = method${i}Map.get(methodKey(receiverOpt.isEmpty, owner, name).value)
+      st"""override def invoke$i[T$ts, R](owner: String, name: String, rOpt: Option[T]$argDecls): R = {
+          |  val f = method${i}Map.get(methodKey(rOpt.isEmpty, owner, name).value)
           |  if (f == null) {
-          |    illegalReflection("Unavailable", receiverOpt.isEmpty, owner, name)
+          |    illegalReflection("Unavailable", rOpt.isEmpty, owner, name)
           |  }
-          |  val r = f(receiverOpt.asInstanceOf[Option[Object]])$args.asInstanceOf[R]
+          |  val r: R = X(f(X(rOpt))$args)
           |  if (r == null) {
-          |    illegalReflection("Invalid", receiverOpt.isEmpty, owner, name)
+          |    illegalReflection("Invalid", rOpt.isEmpty, owner, name)
           |  }
           |  r
           |}"""
@@ -82,13 +84,13 @@ object Reflect {
         else if (t == AST.Typed.nothing) st"Nothing"
         else st"${(t.ids, ".")}${if (t.args.isEmpty) st"" else st"[${(for (t2 <- t.args) yield anyTypeVar(t2), ", ")}]"}"
       case t: AST.Typed.Fun => st"((${(for (t2 <- t.args) yield anyTypeVar(t2), ", ")}) => ${anyTypeVar(t.ret)})"
-      case _: AST.Typed.TypeVar => st"Any"
+      case _: AST.Typed.TypeVar => st"_"
       case _ => halt("Infeasible")
     }
 
-    @strictpure def cast(t: AST.Typed): ST = {
+    @strictpure def cast(o: ST, t: AST.Typed): ST = {
       val tST = anyTypeVar(t)
-      if (tST.render == "Any") st"" else st".asInstanceOf[$tST]"
+      if (isByName(t)) st"X(X[$tST]($o)())" else st"X($o)"
     }
 
     @strictpure def isByName(t: AST.Typed): B = {
@@ -99,18 +101,19 @@ object Reflect {
     }
 
     @strictpure def methodSTF(isInObject: B, owner: ISZ[String], ownerTypeVars: ISZ[AST.TypeParam], id: String, hasParams: B, paramTypes: ISZ[AST.Typed], f: ST => ST): ST = {
-      val ps: ST = if (!hasParams) st"" else st"${for (i <- paramTypes.indices) yield st" => (o${i + 1}: Any)"}"
+      val ps: ST = if (!hasParams) st"" else st"${for (i <- paramTypes.indices) yield st" => (o${i + 1}: $anyName)"}"
       val args: ST = if (!hasParams) {
         st""
       } else {
-        st"(${(for (i <- paramTypes.indices) yield st"o${i + 1}${cast(paramTypes(i))}${if (isByName(paramTypes(i))) "()" else ""}", ", ")})"
+        st"(${(for (i <- paramTypes.indices) yield st"${cast(st"o${i + 1}", paramTypes(i))}", ", ")})"
       }
       val nameEscape = st"${(for (n <- owner) yield ops.StringOps(n).escapeST, ".")}"
       val idEscape = ops.StringOps(id).escapeST
       val name = st"${(owner, ".")}".render
       val ownerAccess: ST = if (isInObject) st"${(for (n <- owner) yield quote(n), ".")}" else
-        st"receiverOpt.get.asInstanceOf[${(for (n <- owner) yield quote(n), ".")}${if (ownerTypeVars.isEmpty) st"" else st"[${(for (_ <- ownerTypeVars.indices) yield "Any", ", ")}]"}]"
-      st"""r.put(0x${Reflection.methodKey(isInObject, name, id)}L /* methodKey(${bool(isInObject)}, "$nameEscape", "$idEscape").value */, ${if (isInObject) "_" else "receiverOpt"}$ps => ${f(st"$ownerAccess.${quote(id)}$args")})"""
+        st"X[${(for (n <- owner) yield quote(n), ".")}${if (ownerTypeVars.isEmpty) st"" else
+          st"[${(for (_ <- ownerTypeVars.indices) yield "_", ", ")}]"}](${if (!hasParams || paramTypes.isEmpty) "_" else "r"})"
+      st"""r.put(0x${Reflection.methodKey(isInObject, name, id)}L, ${if (isInObject) st"_$ps => " else if (!hasParams || paramTypes.isEmpty) st"" else st"r$ps => "}${f(st"$ownerAccess.${quote(id)}$args")}) // methodKey(${bool(isInObject)}, "$nameEscape", "$idEscape").value"""
     }
 
     @strictpure def methodST(isInObject: B, owner: ISZ[String], ownerTypeVars: ISZ[AST.TypeParam], id: String, hasParams: B, paramTypes: ISZ[AST.Typed]): ST =
@@ -206,7 +209,7 @@ object Reflect {
             |  $fieldsST,
             |  $methodsST
             |)"""
-      infos = infos :+ st"""r.put(0x$nameValue /* objectOrTypeKey("$name").value */, info${infos.size})"""
+      infos = infos :+ st"""r.put(0x$nameValue, info${infos.size}) // objectOrTypeKey("$name").value"""
     }
 
     def genSig(info: TypeInfo.Sig): Unit = {
@@ -233,7 +236,7 @@ object Reflect {
             |  $fieldsST,
             |  $methodsST
             |)"""
-      infos = infos :+ st"""r.put(0x$nameValue /* objectOrTypeKey("$name").value */, info${infos.size})"""
+      infos = infos :+ st"""r.put(0x$nameValue, info${infos.size}) // objectOrTypeKey("$name").value"""
     }
 
     def genAdt(info: TypeInfo.Adt): Unit = {
@@ -260,7 +263,7 @@ object Reflect {
           val osST: ST = if (os.size <= 1) st"o" else st"(${(os, ", ")})"
           putss = putss(1 ~> (putss(1) :+
             methodSTF(T, info.name, info.ast.typeParams, Reflection.extractorName, T,
-              ISZ[AST.Typed](AST.Typed.Name(info.name, for (_ <- info.ast.typeParams) yield AST.Typed.Name(ISZ("Any"), ISZ()))),
+              ISZ[AST.Typed](AST.Typed.Name(info.name, for (_ <- info.ast.typeParams) yield AST.Typed.Name(ISZ(anyName), ISZ()))),
               (o: ST) =>
                 if (os.isEmpty) st"if ($o) Some(T) else None()"
                 else
@@ -299,7 +302,7 @@ object Reflect {
             |  $fieldsST,
             |  $methodsST
             |)"""
-      infos = infos :+ st"""r.put(0x$nameValue /* objectOrTypeKey("$name").value */, info${infos.size})"""
+      infos = infos :+ st"""r.put(0x$nameValue, info${infos.size}) // objectOrTypeKey("$name").value"""
     }
 
     for (info <- nameMap.values) {
@@ -355,7 +358,7 @@ object Reflect {
           |    halt(s"$$title reflection $$owner$${if (isInObject) "." else "#"}$$name")
           |  }
           |
-          |  override def kind(name: String): Option[Info] = {
+          |  override def info(name: String): Option[Info] = {
           |    val r = nameMap.get(objectOrTypeKey(name).value)
           |    if (r == null) None() else Some(r)
           |  }
@@ -363,6 +366,10 @@ object Reflect {
           |  ${(for (i <- 0 to maxParams if putss(i).nonEmpty) yield invokeST(i), "\n\n")}
           |
           |  ${(others, "\n\n")}
+          |
+          |  @inline def X[T](o: $anyName): T = o.asInstanceOf[T]
+          |
+          |  @inline def X[T](o: Option[_]): T = o.get.asInstanceOf[T]
           |
           |  override def string: String = "$className"
           |}"""
