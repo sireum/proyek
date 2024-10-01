@@ -67,8 +67,8 @@ object Reflect {
 
     @strictpure def bool(b : B): String = if (b) "T" else "F"
 
-    @strictpure def infoFieldST(isInObject: B, kind: Reflection.Field.Kind.Type, stmt: AST.Stmt.Var): ST =
-      st"""Field(isInObject = $isInObject, isVal = ${bool(stmt.isVal)}, kind = Field.Kind.$kind, name = "${ops.StringOps(stmt.id.value).escapeST}")"""
+    @strictpure def infoFieldST(isInObject: B, kind: Reflection.Field.Kind.Type, isVal: B, id: String): ST =
+      st"""Field(isInObject = $isInObject, isVal = ${bool(isVal)}, kind = Field.Kind.$kind, name = "${ops.StringOps(id).escapeST}")"""
 
     @strictpure def infoMethodST(isInObject: B, owner: ISZ[String], sig: AST.MethodSig): ST = {
       assert(sig.params.size <= maxParams, st"${sig.params.size} > $maxParams: ${(owner, ".")}${if (isInObject) "." else "#"}${sig.id.value}".render)
@@ -166,7 +166,7 @@ object Reflect {
     }
 
     def genObject(info: Info.Object): Unit = {
-      if (!shouldInclude(info.name) || info.isSynthetic) {
+      if (typeMap.contains(info.name) || !shouldInclude(info.name) || info.isSynthetic) {
         return
       }
       var kind: Reflection.Kind.Type = Reflection.Kind.Object
@@ -175,7 +175,7 @@ object Reflect {
       for (stmt <- info.ast.stmts) {
         stmt match {
           case stmt: AST.Stmt.Var =>
-            fields = fields :+ infoFieldST(T, Reflection.Field.Kind.Normal, stmt)
+            fields = fields :+ infoFieldST(T, Reflection.Field.Kind.Normal, stmt.isVal, stmt.id.value)
             putss = putss(0 ~> (putss(0) :+ methodST(T, info.name, ISZ(), stmt.id.value, F, ISZ())))
             if (!stmt.isVal) {
               putss = putss(1 ~> (putss(1) :+
@@ -274,7 +274,7 @@ object Reflect {
         }
       }
       for (v <- info.vars.values) {
-        fields = fields :+ infoFieldST(F, params.get(v.ast.id.value).getOrElse(Reflection.Field.Kind.Normal), v.ast)
+        fields = fields :+ infoFieldST(F, params.get(v.ast.id.value).getOrElse(Reflection.Field.Kind.Normal), v.ast.isVal, v.ast.id.value)
         putss = putss(0 ~> (putss(0) :+ methodST(F, info.name, info.ast.typeParams, v.ast.id.value, F, ISZ())))
         if (!v.ast.isVal) {
           putss = putss(1 ~> (putss(1) :+
@@ -305,9 +305,25 @@ object Reflect {
       infos = infos :+ st"""r.put(0x$nameValue, info${infos.size}) // objectOrTypeKey("$name").value"""
     }
 
+    def genEnum(info: Info.Enum): Unit = {
+      if (!shouldInclude(info.name)) {
+        return
+      }
+      val name = st"${(for (n <- info.name) yield ops.StringOps(n).escapeST, ".")}".render
+      val nameType = st"${(for (n <- info.name :+ "Type") yield ops.StringOps(n).escapeST, ".")}".render
+      val nameValue = Reflection.objectOrTypeKey(name)
+      val nameTypeValue = Reflection.objectOrTypeKey(nameType)
+      infos = infos :+ st"""r.put(0x$nameValue, enumInfo) // objectOrTypeKey("$name").value"""
+      infos = infos :+ st"""r.put(0x$nameTypeValue, enumInfo) // objectOrTypeKey("$nameType").value"""
+      for (element <- info.elements.keys) {
+        putss = putss(0 ~> (putss(0) :+ methodST(T, info.name, ISZ(), element, F, ISZ())))
+      }
+    }
+
     for (info <- nameMap.values) {
       info match {
-        case info: Info.Object if !typeMap.contains(info.name) => genObject(info)
+        case info: Info.Object => genObject(info)
+        case info: Info.Enum => genEnum(info)
         case _ =>
       }
     }
@@ -338,11 +354,14 @@ object Reflect {
           |import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap
           |import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
           |
+          |import Reflection._
+          |
           |object $className {
+          |  val enumInfo: Info = Info(Kind.Enum, ISZ(), ISZ())
           |  def create: Reflection = new $className
           |}
           |
-          |import Reflection._
+          |import $className._
           |
           |class $className extends Reflection {
           |
