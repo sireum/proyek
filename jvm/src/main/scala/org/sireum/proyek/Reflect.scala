@@ -52,14 +52,15 @@ object Reflect {
       val ts: ISZ[ST] = for (j <- 0 until i) yield st", T${j + 1}"
       val argDecls: ISZ[ST] = for (j <- 0 until i) yield st", o${j + 1}: T${j + 1}"
       val args: ISZ[ST] = for (j <- 0 until i) yield st"(o${j + 1})"
-      st"""override def invoke$i[T$ts, R](owner: String, name: String, rOpt: Option[T]$argDecls): R = {
-          |  val f = method${i}Map.get(methodKey(rOpt.isEmpty, owner, name).value)
+      st"""override def invoke$i[T$ts, R](owner: String, name: String, receiver: T$argDecls): R = {
+          |  val isInObject = receiver == null
+          |  val f = method${i}Map.get(methodKey(isInObject, owner, name).value)
           |  if (f == null) {
-          |    illegalReflection("Unavailable", rOpt.isEmpty, owner, name)
+          |    illegalReflection("Unavailable", isInObject, owner, name)
           |  }
-          |  val r: R = X(f(X(rOpt))$args)
+          |  val r: R = X(f(X(receiver))$args)
           |  if (r == null) {
-          |    illegalReflection("Invalid", rOpt.isEmpty, owner, name)
+          |    illegalReflection("Invalid", isInObject, owner, name)
           |  }
           |  r
           |}"""
@@ -265,11 +266,11 @@ object Reflect {
             methodSTF(T, info.name, info.ast.typeParams, Reflection.extractorName, T,
               ISZ[AST.Typed](AST.Typed.Name(info.name, for (_ <- info.ast.typeParams) yield AST.Typed.Name(ISZ(anyName), ISZ()))),
               (o: ST) =>
-                if (os.isEmpty) st"if ($o) Some(T) else None()"
+                if (os.isEmpty) st"if ($o) MSome(T) else MNone()"
                 else
                   st"""$o match {
-                      |  case scala.Some($osST) => Some($osST)
-                      |  case _ => None()
+                      |  case scala.Some($osST) => MSome($osST)
+                      |  case _ => MNone()
                       |}""")))
         }
       }
@@ -363,7 +364,7 @@ object Reflect {
           |
           |import $className._
           |
-          |class $className extends Reflection {
+          |class $className extends Reflection_Ext {
           |
           |  private lazy val nameMap: Int2ObjectOpenHashMap[Reflection.Info] = {
           |    val r = new Int2ObjectOpenHashMap[Info](${infos.size})
@@ -387,8 +388,6 @@ object Reflect {
           |  ${(others, "\n\n")}
           |
           |  @inline def X[T](o: $anyName): T = o.asInstanceOf[T]
-          |
-          |  @inline def X[T](o: Option[_]): T = o.get.asInstanceOf[T]
           |
           |  override def string: String = "$className"
           |}"""
