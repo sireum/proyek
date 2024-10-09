@@ -287,7 +287,6 @@ object Ive {
     val scalaSettings: ST =
       st"""<component name="ScalaProjectSettings">
           |  <option name="autoRunDelay" value="3000" />
-          |  <option name="compilerHighlightingScala2" value="true" />
           |  <option name="dontCacheCompoundTypes" value="true" />
           |  <option name="inProcessMode" value="false" />
           |  <option name="intInjectionMapping">
