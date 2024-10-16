@@ -130,7 +130,8 @@ object Assemble {
           isNative: B,
           isUber: B,
           includeSources: B,
-          includeTests: B): Z = {
+          includeTests: B,
+          excludedDeps: ISZ[(String, String)]): Z = {
 
     val trueF = (_: Os.Path) => T
 
@@ -168,13 +169,24 @@ object Assemble {
       }
     }
 
+    @pure def isExcluded(org: String, module: String): B = {
+      for (p <- excludedDeps) {
+        if (ops.StringOps(org).startsWith(p._1) && ops.StringOps(module).startsWith(p._2)) {
+          return T
+        }
+      }
+      return F
+    }
+
     if (!noDeps) {
       for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
-        Os.path(lib.main).unzipTo(contentDir)
-        if (includeSources) {
-          lib.sourcesOpt match {
-            case Some(src) => Os.path(src).unzipTo(contentDir)
-            case _ =>
+        if (!isExcluded(lib.org, lib.module)) {
+          Os.path(lib.main).unzipTo(contentDir)
+          if (includeSources) {
+            lib.sourcesOpt match {
+              case Some(src) => Os.path(src).unzipTo(contentDir)
+              case _ =>
+            }
           }
         }
       }

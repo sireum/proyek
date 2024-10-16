@@ -156,6 +156,10 @@ object cli {
     usage = "<options>* <dir>",
     usageDescOpt = None(),
     opts = ISZ(
+      Opt(name = "excludeJarDeps", longKey = "exclude-jar-deps", shortKey = None(),
+        tpe = Type.Str(sep = Some(','), default = None()),
+        description = "Exclude .jar Ivy (format: <org-prefix>:<module-prefix>) dependencies"
+      ),
       Opt(name = "includeSources", longKey = "include-sources", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Include source files"

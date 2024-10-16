@@ -273,8 +273,8 @@ object Ive {
     IVE.writeCompiler(dotIdea, javacOptions)
     IVE.writeScalaCompiler(dotIdea, dm.scalacPlugin, scalacOptions)
     IVE.writeScalaSettings(dotIdea)
+    IVE.writeUIDesigner(dotIdea)
     IVE.writeInspectionProfiles(dotIdea)
-    IVE.writeUiDesigner(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
     IVE.writeApplicationConfigs(force, dm.sireumHome, ideaDir, dm.javaHome, dm.javaVersion, isDev, configPath, sandboxPath)
@@ -698,6 +698,20 @@ object Ive {
       println(s"Wrote $f")
     }
 
+    def writeUIDesigner(dotIdea: Os.Path): Unit = {
+      val f = dotIdea / "uiDesigner.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="uidesigner-configuration">
+            |    <option name="INSTRUMENT_CLASSES" value="false" />
+            |    <option name="DEFAULT_FIELD_ACCESSIBILITY" value="public" />
+            |  </component>
+            |</project>""".render
+      )
+      println(s"Wrote $f")
+    }
+
     def writeScriptRunner(dotIdea: Os.Path, javaHome: Os.Path, name: String): Unit = {
       val runConfigurations = dotIdea / "runConfigurations"
       runConfigurations.mkdirAll()
@@ -715,20 +729,6 @@ object Ive {
             |    <method v="2" />
             |  </configuration>
             |</component>
-            |""".render
-      )
-      println(s"Wrote $f")
-    }
-
-    def writeUiDesigner(dotIdea: Os.Path): Unit = {
-      val f = dotIdea / "uiDesigner.xml"
-      f.writeOver(
-        st"""<?xml version="1.0" encoding="UTF-8"?>
-            |<project version="4">
-            |  <component name="uidesigner-configuration">
-            |    <option name="INSTRUMENT_CLASSES" value="true" />
-            |  </component>
-            |</project>
             |""".render
       )
       println(s"Wrote $f")
