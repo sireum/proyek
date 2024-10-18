@@ -156,7 +156,9 @@ object Assemble {
 
     if (Proyek.hasScalaSource(project)) {
       (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
-      Asm.rewriteReleaseFence(contentDir)
+      if (Proyek.hasSlangSource(project)) {
+        Asm.rewriteReleaseFence(contentDir)
+      }
     }
 
     var testLibNames = HashSet.empty[String]

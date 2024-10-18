@@ -236,4 +236,13 @@ object Proyek {
     return F
   }
 
+  @pure def hasSlangSource(project: org.sireum.project.Project): B = {
+    for (m <- project.modules.values;
+         src <- ProjectUtil.moduleSources(m) ++ ProjectUtil.moduleTestSources(m);
+         f <- Os.Path.walk(src, F, F, (p: Os.Path) => p.ext == "scala") if
+           lang.parser.Parser.detectSlang(Some(f.toUri), f.readLineStream.take(1).mkString("\n"))._1) {
+      return T
+    }
+    return F
+  }
 }
