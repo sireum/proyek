@@ -125,6 +125,7 @@ object Reflect {
     var infos = ISZ[ST]()
     var others = ISZ[ST]()
     var putss = ISZ.create(maxParams + 1, ISZ[ST]())
+    var classNameSTs = ISZ[ST]()
 
     @pure def shouldInclude(name: ISZ[String]): B = {
       if (excluded.contains(name)) {
@@ -304,6 +305,15 @@ object Reflect {
             |  $methodsST
             |)"""
       infos = infos :+ st"""r.put(0x$nameValue, info${infos.size}) // objectOrTypeKey("$name").value"""
+
+      if (info.ast.isRoot) {
+        return
+      }
+
+      val targsOpt: Option[ST] = if (info.ast.typeParams.isEmpty) None() else Some(
+        st"[${(for (_ <- info.ast.typeParams.indices) yield "_", ", ")}]"
+      )
+      classNameSTs = classNameSTs :+ st"""case o: ${(info.name, ".")}$targsOpt => return Some("$name")"""
     }
 
     def genEnum(info: Info.Enum): Unit = {
@@ -381,6 +391,13 @@ object Reflect {
           |  override def info(name: String): Option[Info] = {
           |    val r = nameMap.get(objectOrTypeKey(name).value)
           |    if (r == null) None() else Some(r)
+          |  }
+          |
+          |  override def classNameOf[T](o: T): Option[String] = {
+          |    o match {
+          |      ${(classNameSTs, "\n")}
+          |      case _ => return None()
+          |    }
           |  }
           |
           |  ${(for (i <- 0 to maxParams if putss(i).nonEmpty) yield invokeST(i), "\n\n")}
