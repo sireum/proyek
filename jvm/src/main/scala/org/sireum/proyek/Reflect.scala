@@ -329,6 +329,7 @@ object Reflect {
       for (element <- info.elements.keys) {
         putss = putss(0 ~> (putss(0) :+ methodST(T, info.name, ISZ(), element, F, ISZ())))
       }
+      classNameSTs = classNameSTs :+ st"""case o: ${(info.name :+ "Type", ".")} => return Some("$nameType")"""
     }
 
     for (info <- nameMap.values) {
