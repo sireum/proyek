@@ -82,8 +82,8 @@ object Assemble {
   def nativ(sireumHome: Os.Path, jar: Os.Path): Z = {
     val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
       case Os.Kind.Mac => ("mac", ISZ())
-      case Os.Kind.Linux => ("linux", ISZ())
-      case Os.Kind.LinuxArm => ("linux/arm", ISZ())
+      case Os.Kind.Linux => ("linux", ISZ("--static", "--libc=musl"))
+      case Os.Kind.LinuxArm => ("linux/arm", ISZ("--static", "--libc=musl"))
       case Os.Kind.Win => ("win", ISZ("-H:NativeLinkerOption=Winhttp.lib"))
       case _ => halt("Unsupported operating system")
     }
