@@ -79,6 +79,19 @@ object Assemble {
     st"--initialize-at-run-time=${(graalRtPackagesOrClasses, ",")}".render
   )
 
+  def installMusl(sireumHome: Os.Path): Option[Os.Path] = {
+    val homeBin = sireumHome / "bin"
+    val muslBinOpt: Option[Os.Path] = Os.kind match {
+      case Os.Kind.Linux => Some(homeBin / "linux" / "musl" / "bin")
+      case Os.Kind.LinuxArm => Some(homeBin / "linux" / "arm" / "musl" / "bin")
+      case _ => None()
+    }
+    if (muslBinOpt.nonEmpty && !muslBinOpt.get.exists) {
+      (homeBin / "install" / "musl.cmd").call(ISZ()).console.runCheck()
+    }
+    return muslBinOpt
+  }
+
   def nativ(sireumHome: Os.Path, jar: Os.Path): Z = {
     val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
       case Os.Kind.Mac => ("mac", ISZ())
@@ -108,8 +121,13 @@ object Assemble {
       }
     }
     val jarName = ops.StringOps(jar.name).substring(0, jar.name.size - 4)
-    val r = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
-      ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr.run()
+    var p = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
+      ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr
+    installMusl(sireumHome) match {
+      case Some(muslBin) => p = p.env(ISZ("PATH" ~> s"${Os.env("PATH").get}:$muslBin"))
+      case _ =>
+    }
+    val r = p.run()
     tempJar.copyOverTo(jar)
     if (r.exitCode != 0) {
       eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
