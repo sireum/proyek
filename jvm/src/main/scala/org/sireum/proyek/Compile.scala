@@ -178,6 +178,12 @@ object Compile {
     if (ignoreRuntime) {
       versions = versions -- ISZ(DependencyManager.libraryKey)
     }
+    for (m <- project.modules.values; dep <- m.ivyDeps) {
+      dm.resolveVersion(dep) match {
+        case (Some(_), version) => versions = versions + dep ~> version
+        case (_, _) =>
+      }
+    }
 
     val versionsChanged: B = if (fresh) {
       T

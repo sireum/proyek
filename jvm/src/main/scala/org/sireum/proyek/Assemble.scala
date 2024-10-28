@@ -173,8 +173,19 @@ object Assemble {
     val metaDir = contentDir / metaInf
     metaDir.mkdirAll()
 
+    @pure def isExcluded(org: String, module: String): B = {
+      for (p <- excludedDeps) {
+        if (ops.StringOps(org).startsWith(p._1) && ops.StringOps(module).startsWith(p._2)) {
+          return T
+        }
+      }
+      return F
+    }
+
     if (Proyek.hasScalaSource(project)) {
-      (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
+      if (!noDeps && !isExcluded("org.scala-lang", "scala-library")) {
+        (dm.scalaHome / "lib" / "scala-library.jar").unzipTo(contentDir)
+      }
       if (Proyek.hasSlangSource(project)) {
         Asm.rewriteReleaseFence(contentDir)
       }
@@ -188,15 +199,6 @@ object Assemble {
           testLibNames = testLibNames + name
         }
       }
-    }
-
-    @pure def isExcluded(org: String, module: String): B = {
-      for (p <- excludedDeps) {
-        if (ops.StringOps(org).startsWith(p._1) && ops.StringOps(module).startsWith(p._2)) {
-          return T
-        }
-      }
-      return F
     }
 
     if (!noDeps) {
