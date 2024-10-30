@@ -212,10 +212,12 @@ object Ive {
         println(s"Wrote $f")
       }
 
+      var seen = HashSet.empty[String]
       var moduleIds = project.poset.rootNodes
       while (moduleIds.nonEmpty) {
         var newModuleIds = HashSSet.empty[String]
-        for (mid <- moduleIds) {
+        for (mid <- moduleIds if !seen.contains(mid)) {
+          seen = seen + mid
           val module: Module = project.modules.get(mid) match {
             case Some(m) => m
             case _ => halt(s"Could not find module with id '$mid' in the project")
