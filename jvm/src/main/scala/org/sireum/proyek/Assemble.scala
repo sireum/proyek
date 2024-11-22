@@ -69,7 +69,8 @@ object Assemble {
     "com.sun.jna",
     "org.jline.nativ",
     "org.jline.nativ.Kernel32$MENU_EVENT_RECORD",
-    "org.jline.terminal.impl.jna.win"
+    "org.jline.terminal.impl.jna.win",
+    "coursierapi.internal.jniutils"
   )
 
   val graalOpts: ISZ[String] = ISZ[String](
