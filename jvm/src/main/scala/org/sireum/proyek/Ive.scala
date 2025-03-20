@@ -279,6 +279,7 @@ object Ive {
     IVE.writeInspectionProfiles(dotIdea)
     IVE.writeScriptRunner(dotIdea, dm.javaHome, projectName)
     IVE.writeWorkspace(dotIdea, dm.sireumHome)
+    IVE.writeSbt(dotIdea)
     IVE.writeApplicationConfigs(force, dm.sireumHome, ideaDir, dm.javaHome, dm.javaVersion, isDev, configPath, sandboxPath)
     IVE.writeIveInfo(dotIdea, project, dm.versions)
     return 0
@@ -518,7 +519,7 @@ object Ive {
                 |    <option name="SHOW_TYPE_TOOLTIP_ON_MOUSE_HOVER" value="true" />
                 |    <option name="COMPILE_SERVER_SDK" value="Project Default" />
                 |    <option name="COMPILE_SERVER_MAXIMUM_HEAP_SIZE" value="2048" />
-                |    <option name="COMPILE_SERVER_JVM_PARAMETERS" value="-server -Xss2m -XX:MaxInlineLevel=20" />
+                |    <option name="COMPILE_SERVER_JVM_PARAMETERS" value="-server -Xss2m -XX:MaxInlineLevel=20 --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow" />
                 |    <option name="COMPILE_SERVER_PARALLELISM" value="4" />
                 |  </component>
                 |</application>""".render
@@ -714,6 +715,21 @@ object Ive {
       println(s"Wrote $f")
     }
 
+    def writeSbt(dotIdea: Os.Path): Unit = {
+      val f = dotIdea / "sbt.xml"
+      f.writeOver(
+        st"""<?xml version="1.0" encoding="UTF-8"?>
+            |<project version="4">
+            |  <component name="ScalaSbtSettings">
+            |    <option name="customLauncherPath" />
+            |    <option name="customVMPath" />
+            |    <option name="vmParameters" value="--enable-native-access=ALL-UNNAMED" />
+            |  </component>
+            |</project>""".render
+      )
+      println(s"Wrote $f")
+    }
+
     def writeScriptRunner(dotIdea: Os.Path, javaHome: Os.Path, name: String): Unit = {
       val runConfigurations = dotIdea / "runConfigurations"
       runConfigurations.mkdirAll()
@@ -728,6 +744,7 @@ object Ive {
             |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
             |    <module name="$name" />
             |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
+            |    <option name="VM_PARAMETERS" value="--enable-native-access=ALL-UNNAMED" />
             |    <method v="2" />
             |  </configuration>
             |</component>
@@ -748,6 +765,53 @@ object Ive {
             |      <setting name="fileName" value="" />
             |      <setting name="scriptParameters" value="" />
             |      <method v="2" />
+            |    </configuration>
+            |    <configuration default="true" type="Application" factoryName="Application">
+            |      <option name="VM_PARAMETERS" value="--enable-native-access=ALL-UNNAMED" />
+            |      <method v="2">
+            |        <option name="Make" enabled="true" />
+            |      </method>
+            |    </configuration>
+            |    <configuration default="true" type="JUnit" factoryName="JUnit">
+            |      <option name="MAIN_CLASS_NAME" value="" />
+            |      <option name="METHOD_NAME" value="" />
+            |      <option name="TEST_OBJECT" value="class" />
+            |      <option name="VM_PARAMETERS" value="-ea --enable-native-access=ALL-UNNAMED" />
+            |      <method v="2">
+            |        <option name="Make" enabled="true" />
+            |      </method>
+            |    </configuration>
+            |    <configuration default="true" type="JarApplication">
+            |      <option name="ALTERNATIVE_JRE_PATH" />
+            |      <method v="2" />
+            |    </configuration>
+            |    <configuration default="true" type="ScalaTestRunConfiguration" factoryName="ScalaTest" show_console_on_std_err="false" show_console_on_std_out="false">
+            |      <option name="VMParameters" value="--enable-native-access=ALL-UNNAMED" />
+            |      <option name="allowRunningInParallel" value="false" />
+            |      <option name="alternativeJrePath" />
+            |      <option name="alternativeJrePathEnabled" value="false" />
+            |      <option name="classpathModifications">
+            |        <list />
+            |      </option>
+            |      <option name="envFilePaths">
+            |        <list />
+            |      </option>
+            |      <option name="envs">
+            |        <map />
+            |      </option>
+            |      <option name="passParentEnvs" value="true" />
+            |      <option name="programParameters" value="" />
+            |      <option name="projectPathOnTarget" />
+            |      <option name="selectedOptions">
+            |        <list />
+            |      </option>
+            |      <option name="testKind" value="Class" />
+            |      <option name="workingDirectory" value="$$PROJECT_DIR$$" />
+            |      <option name="javaOptions" value="--enable-native-access=ALL-UNNAMED" />
+            |      <option name="shortenClasspath" value="NONE" />
+            |      <method v="2">
+            |        <option name="Make" enabled="true" />
+            |      </method>
             |    </configuration>
             |    <list>
             |      <item itemvalue="Application.Slang Script Runner" />
