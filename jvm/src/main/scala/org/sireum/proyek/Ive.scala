@@ -471,7 +471,7 @@ object Ive {
           fileTypesXml.writeOver(
             st"""<application>
                 |  <component name="FileTypeManager" version="18">
-                |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;cargo;rustup;rustrover;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc;vscodium;Brave Browser.app;brave" />
+                |    <ignoreFiles list=".settings;.opam;acl2;ccl;clion;fmide.app;fmide;graal;idea;idea-ultimate;cargo;rustup;rustrover;Isabelle.app;isabelle;*.pyc;*.pyo;*.rbc;*.yarb;*~;.DS_Store;.git;.hg;.svn;CVS;__pycache__;_svn;vssver.scc;vssver2.scc;vscodium;Brave Browser.app;brave;result-java" />
                 |    <extensionMap>
                 |      <mapping ext="cmd" type="Scala Worksheet" />
                 |      <removed_mapping ext="cmd" approved="true" type="PLAIN_TEXT" />
