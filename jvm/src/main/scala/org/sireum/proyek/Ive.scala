@@ -559,7 +559,7 @@ object Ive {
             disableds = disableds + ops.StringOps(line).trim
           }
         }
-        disabledPlugins.writeOver(st"""${(disableds, "\n")}""".render)
+        disabledPlugins.writeOver(st"""${(disableds.elements, "\n")}""".render)
         println(s"Wrote $disabledPlugins")
       }
 
