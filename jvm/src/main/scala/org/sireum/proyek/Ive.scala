@@ -546,11 +546,29 @@ object Ive {
         }
       }
 
+      def writeDisabledPlugins(): Unit = {
+        var disableds = HashSSet.empty[String] ++ ISZ(
+          "com.intellij.completion.ml.ranking",
+          "com.intellij.marketplace.ml",
+          "com.intellij.searcheverywhere.ml",
+          "com.intellij.turboComplete",
+          "org.jetbrains.completion.full.line")
+        val disabledPlugins = configPath / "disabled_plugins.txt"
+        if (disabledPlugins.exists) {
+          for (line <- disabledPlugins.readLineStream) {
+            disableds = disableds + ops.StringOps(line).trim
+          }
+        }
+        disabledPlugins.writeOver(st"""${(disableds, "\n")}""".render)
+        println(s"Wrote $disabledPlugins")
+      }
+
       writeJdkTable()
       writeFileTypes()
       writeColors()
       writeScala()
       writeEditorFont()
+      writeDisabledPlugins()
 
       sandboxPath.mkdirAll()
     }
