@@ -553,26 +553,26 @@ object Ive {
         if (!isCommunity) {
           return
         }
-        var disableds = HashSSet.empty[String] ++ ISZ(
-          "com.intellij.completion.ml.ranking",
-          "com.intellij.marketplace.ml",
-          "com.intellij.searcheverywhere.ml",
-          "com.intellij.turboComplete",
-          "org.jetbrains.completion.full.line",
-          "PerforceDirectPlugin",
-          "com.android.tools.gradle.dcl",
-          "com.intellij.compose",
-          "com.intellij.marketplace",
-          "com.intellij.notebooks.core",
-          "com.intellij.tasks",
-          "com.jetbrains.codeWithMe",
-          "hg4idea",
-          "intellij.git.commit.modal",
-          "intellij.jupyter",
-          "org.intellij.qodana",
-          "org.jetbrains.idea.eclipse",
-          "org.jetbrains.plugins.kotlin.jupyter",
-          "training"
+        var disableds = HashSSet.empty[String] ++ ISZ[String](
+//          "com.intellij.completion.ml.ranking",
+//          "com.intellij.marketplace.ml",
+//          "com.intellij.searcheverywhere.ml",
+//          "com.intellij.turboComplete",
+//          "org.jetbrains.completion.full.line",
+//          "PerforceDirectPlugin",
+//          "com.android.tools.gradle.dcl",
+//          "com.intellij.compose",
+//          "com.intellij.marketplace",
+//          "com.intellij.notebooks.core",
+//          "com.intellij.tasks",
+//          "com.jetbrains.codeWithMe",
+//          "hg4idea",
+//          "intellij.git.commit.modal",
+//          "intellij.jupyter",
+//          "org.intellij.qodana",
+//          "org.jetbrains.idea.eclipse",
+//          "org.jetbrains.plugins.kotlin.jupyter",
+//          "training"
         )
         val disabledPlugins = configPath / "disabled_plugins.txt"
         if (disabledPlugins.exists) {
