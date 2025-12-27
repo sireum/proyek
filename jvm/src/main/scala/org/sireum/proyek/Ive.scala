@@ -562,6 +562,7 @@ object Ive {
           "PerforceDirectPlugin",
           "TestNG-J",
           "Tomcat",
+          "com.android.tools.gradle.dcl",
           "com.deadlock.scsyntax",
           "com.intellij.aop",
           "com.intellij.beanValidation",
