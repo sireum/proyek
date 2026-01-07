@@ -840,7 +840,7 @@ object Ive {
             |    <option name="MAIN_CLASS_NAME" value="org.sireum.Sireum" />
             |    <module name="$name" />
             |    <option name="PROGRAM_PARAMETERS" value="slang run $$FilePath$$" />
-            |    <option name="VM_PARAMETERS" value="--enable-native-access=ALL-UNNAMED" />
+            |    <option name="VM_PARAMETERS" value="--enable-native-access=javafx.media --enable-native-access=javafx.graphics --enable-native-access=ALL-UNNAMED" />
             |    <method v="2" />
             |  </configuration>
             |</component>
