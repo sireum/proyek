@@ -203,7 +203,8 @@ object Assemble {
     }
 
     if (!noDeps) {
-      for (lib <- dm.libMap.values if !testLibNames.contains(lib.name)) {
+      for (lib <- dm.libMap.values if !testLibNames.contains(lib.name) &&
+        (lib.name != "org.scala-lang.scalap" || Proyek.hasScalaSource(project))) {
         if (!isExcluded(lib.org, lib.module)) {
           Os.path(lib.main).unzipTo(contentDir)
           if (includeSources) {
