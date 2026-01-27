@@ -188,6 +188,10 @@ object cli {
         tpe = Type.Flag(F),
         description = "Generates native image"
       ),
+      Opt(name = "isNativeScript", longKey = "native-script", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Generates native image script"
+      ),
       Opt(name = "uber", longKey = "uber", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Generates uber jar"
@@ -283,7 +287,7 @@ object cli {
       Opt(name = "rebuildIve", longKey = "rebuild-ive", shortKey = None(),
         tpe = Type.Flag(F),
         description = "Rebuild IVE"
-      ),
+      )
     ) ++ (for (opt <- commonCompileOpts if opt.name == "javac" || opt.name == "scalac") yield opt),
     groups = ISZ(
       projectOptGroup,

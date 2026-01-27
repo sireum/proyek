@@ -94,7 +94,7 @@ object Assemble {
     return muslBinOpt
   }
 
-  def nativ(sireumHome: Os.Path, jar: Os.Path): Z = {
+  def nativ(sireumHome: Os.Path, jar: Os.Path, genScript: B): Z = {
     val (platformKind, flags): (String, ISZ[String]) = Os.kind match {
       case Os.Kind.Mac => ("mac", ISZ())
       case Os.Kind.Linux => ("linux", ISZ("--static", "--libc=musl"))
@@ -105,11 +105,12 @@ object Assemble {
     val homeBin = sireumHome / "bin"
 
     println()
-    println("Building native ...")
-    val tempJar = Os.temp()
+    if (!genScript) {
+      println("Building native ...")
+    }
+    val tempJar = Os.tempFix("", ".jar")
     jar.copyOverTo(tempJar)
-    tempJar.removeOnExit()
-    Asm.eraseNonNative(jar)
+    Asm.eraseNonNative(tempJar)
     val platDir = homeBin / platformKind
     val dir = jar.up.canon
     var nativeImage: Os.Path = platDir / "graal" / "bin" / (if (Os.isWin) "native-image.cmd" else "native-image")
@@ -123,20 +124,41 @@ object Assemble {
       }
     }
     val jarName = ops.StringOps(jar.name).substring(0, jar.name.size - 4)
+    val out = (dir / jarName).string
     var p = Os.proc((nativeImage.string +: flags) ++ graalOpts ++
-      ISZ[String]("-jar", jar.string, (dir / jarName).string)).redirectErr
+      ISZ[String]("-jar", tempJar.string, out)).redirectErr
     installMusl(sireumHome) match {
       case Some(muslBin) => p = p.env(ISZ("PATH" ~> s"${Os.env("PATH").get}:$muslBin"))
       case _ =>
     }
-    val r = p.run()
-    tempJar.copyOverTo(jar)
-    if (r.exitCode != 0) {
-      eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
-      eprintln(r.out)
-      eprintln(r.err)
+    if (genScript) {
+      if (Os.isWin) {
+        val script = jar.up / "build-native.bat"
+        script.writeOver(
+          st"""${(p.cmds, " ")}
+              |echo Wrote $out.exe""".render
+        )
+        println(s"Wrote $script")
+      } else {
+        val script = jar.up / "build-native"
+        script.writeOver(
+          st"""${(p.cmds, " ")}
+              |echo "Wrote $out"""".render
+        )
+        script.chmod("+x")
+        println(s"Wrote $script")
+      }
+      return 0
+    } else {
+      val r = p.run()
+      tempJar.removeAll()
+      if (r.exitCode != 0) {
+        eprintln(s"Failed to generate native executable, exit code: ${r.exitCode}")
+        eprintln(r.out)
+        eprintln(r.err)
+      }
+      return r.exitCode
     }
-    return r.exitCode
   }
 
   def run(path: Os.Path,
@@ -148,6 +170,7 @@ object Assemble {
           dm: DependencyManager,
           mainClassNameOpt: Option[String],
           isNative: B,
+          isNativeScript: B,
           isUber: B,
           includeSources: B,
           includeTests: B,
@@ -278,8 +301,8 @@ object Assemble {
       println(s"Wrote $jar")
     }
 
-    if (isNative) {
-      nativ(dm.sireumHome, jar)
+    if (isNative || isNativeScript) {
+      nativ(dm.sireumHome, jar, isNativeScript)
     }
 
     return 0
