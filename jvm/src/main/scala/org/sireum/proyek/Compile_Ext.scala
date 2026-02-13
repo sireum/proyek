@@ -45,7 +45,11 @@ object Compile_Ext {
   }
 
   def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = {
-    if ($internal.Macro.isNative) {
+    val useProcess = $internal.Macro.isNative || {
+      val cp = System.getProperty("java.class.path")
+      cp == null || !cp.contains("scala-compiler")
+    }
+    if (useProcess) {
       val r = (if (Os.isWin) Os.proc(ISZ("cmd", "/C", scalacFile, s"@$argFile"))
       else Os.proc(ISZ("bash", "-c", s"$scalacFile @$argFile"))).env(env).run()
       return (r.exitCode, r.out, r.err)
