@@ -28,15 +28,20 @@ import org.sireum._
 
 object Compile_Ext {
 
-  def javac(argFile: String, env: ISZ[(String, String)]): (Z, String, String) = {
-    val compiler = javax.tools.ToolProvider.getSystemJavaCompiler
-    if (compiler == null) {
-      return (-1, "", "Error: no system Java compiler available")
+  def javac(javacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = {
+    if ($internal.Macro.isNative) {
+      val r = Os.proc(ISZ(javacFile, s"@$argFile")).env(env).run()
+      return (r.exitCode, r.out, r.err)
+    } else {
+      val compiler = javax.tools.ToolProvider.getSystemJavaCompiler
+      if (compiler == null) {
+        return (-1, "", "Error: no system Java compiler available")
+      }
+      val outBaos = new java.io.ByteArrayOutputStream()
+      val errBaos = new java.io.ByteArrayOutputStream()
+      val rc = compiler.run(null, outBaos, errBaos, s"@${argFile.value}")
+      return (rc, String(outBaos.toString), String(errBaos.toString))
     }
-    val outBaos = new java.io.ByteArrayOutputStream()
-    val errBaos = new java.io.ByteArrayOutputStream()
-    val rc = compiler.run(null, outBaos, errBaos, s"@${argFile.value}")
-    return (rc, String(outBaos.toString), String(errBaos.toString))
   }
 
   def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = {

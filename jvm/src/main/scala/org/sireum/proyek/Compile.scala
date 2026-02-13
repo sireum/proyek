@@ -34,7 +34,7 @@ import org.sireum.proyek.Proyek._
 object Compile {
 
   @ext("Compile_Ext") object Ext {
-    def javac(argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
+    def javac(javacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
     def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
   }
 
@@ -397,7 +397,8 @@ object Compile {
         javaArgs = javaArgs ++ (for (f <- javaSources) yield ops.StringOps(s""""$f"""").replaceAllLiterally("\\", "\\\\"))
         val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
-        val (javacRc, javacOut, javacErr) = Ext.javac(argFile = argFile.canon.string, env = env)
+        val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
+        val (javacRc, javacOut, javacErr) = Ext.javac(javacFile = javac.string, argFile = argFile.canon.string, env = env)
         sb = sb :+ st"$javacOut"
         sb = sb :+ st"$javacErr"
         return (javacRc == 0, st"${(sb, "")}".render)
