@@ -33,6 +33,11 @@ import org.sireum.proyek.Proyek._
 
 object Compile {
 
+  @ext("Compile_Ext") object Ext {
+    def javac(argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
+    def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
+  }
+
   @enum object CompileStatus {
     "Compiled"
     "Skipped"
@@ -374,17 +379,16 @@ object Compile {
       env = env :+ "JAVA_OPTS" ~> " "
     }
     if (numOfSlangFiles > 0 || numOfScalaFiles > 0) {
-      val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
       scalaArgs = scalaArgs ++ (for (opt <- scalacOptions) yield s""""$opt"""")
       scalaArgs = scalaArgs ++ (for (f <- sourceFiles) yield s""""$f"""")
 
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
-      val r = (if (Os.isWin) proc"cmd /C ${scalac.name} @${argFile.name}"
-      else Os.proc(ISZ("bash", "-c", s"${scalac.name} @${argFile.name}"))).env(env).at(argFile.up.canon).run()
-      ok = r.ok
-      sb = sb :+ st"${r.out}"
-      sb = sb :+ st"${r.err}"
+      val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
+      val (scalacRc, scalacOut, scalacErr) = Ext.scalac(scalacFile = scalac.string, argFile = argFile.canon.string, env = env)
+      ok = scalacRc == 0
+      sb = sb :+ st"$scalacOut"
+      sb = sb :+ st"$scalacErr"
     }
 
     if (ok) {
@@ -393,12 +397,10 @@ object Compile {
         javaArgs = javaArgs ++ (for (f <- javaSources) yield ops.StringOps(s""""$f"""").replaceAllLiterally("\\", "\\\\"))
         val argFile = outDir.up / s"javac-args-$category"
         argFile.writeOver(st"${(javaArgs, "\n")}".render)
-        val javac: Os.Path = javaHome / "bin" / (if (Os.isWin) "javac.exe" else "javac")
-        val r = (if (Os.isWin) proc"cmd /C ${javac.name} @${argFile.name}"
-        else Os.proc(ISZ("bash", "-c", s"${javac.name} @${argFile.name}"))).env(env).at(argFile.up.canon).run()
-        sb = sb :+ st"${r.out}"
-        sb = sb :+ st"${r.err}"
-        return (r.ok, st"${(sb, "")}".render)
+        val (javacRc, javacOut, javacErr) = Ext.javac(argFile = argFile.canon.string, env = env)
+        sb = sb :+ st"$javacOut"
+        sb = sb :+ st"$javacErr"
+        return (javacRc == 0, st"${(sb, "")}".render)
       } else {
         return (T, st"${(sb, "")}".render)
       }
@@ -406,5 +408,6 @@ object Compile {
       return (F, st"${(sb, "")}".render)
     }
   }
+
 
 }
