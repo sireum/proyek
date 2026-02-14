@@ -70,7 +70,8 @@ object Assemble {
     "org.jline.nativ",
     "org.jline.nativ.Kernel32$MENU_EVENT_RECORD",
     "org.jline.terminal.impl.jna.win",
-    "coursierapi.internal.jniutils"
+    "coursierapi.internal.jniutils",
+    "org.sireum.parser.SireumAntlr3ParserUtil$"
   )
 
   val graalOpts: ISZ[String] = ISZ[String](
