@@ -44,15 +44,15 @@ object Compile_Ext {
     }
   }
 
-  def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = {
+  def scalac(scalacFile: String, argFile: String, outDir: String, env: ISZ[(String, String)]): (Z, String, String) = {
     val useProcess = $internal.Macro.isNative || {
       val cp = System.getProperty("java.class.path")
       cp == null || !cp.contains("scala-compiler")
     }
-    if (useProcess) {
+    val result: (Z, String, String) = if (useProcess) {
       val r = (if (Os.isWin) Os.proc(ISZ("cmd", "/C", scalacFile, s"@$argFile"))
       else Os.proc(ISZ("bash", "-c", s"$scalacFile @$argFile"))).env(env).run()
-      return (r.exitCode, r.out, r.err)
+      (r.exitCode, r.out, r.err)
     } else {
       val args = Array(s"@${argFile.value}")
       val outBaos = new java.io.ByteArrayOutputStream()
@@ -81,19 +81,29 @@ object Compile_Ext {
         outPs.flush()
         errPs.flush()
         val rc: Z = if (ok) 0 else 1
-        return (rc, String(outBaos.toString), String(errBaos.toString))
+        (rc, String(outBaos.toString), String(errBaos.toString))
       } catch {
         case e: java.lang.reflect.InvocationTargetException =>
           outPs.flush()
           errPs.flush()
           val cause = if (e.getCause != null) e.getCause else e
-          return (-1, String(outBaos.toString), String(s"${errBaos.toString}Error invoking Scala compiler: ${cause.getMessage}"))
+          (-1, String(outBaos.toString), String(s"${errBaos.toString}Error invoking Scala compiler: ${cause.getMessage}"))
         case e: Exception =>
           outPs.flush()
           errPs.flush()
-          return (-1, String(outBaos.toString), String(s"${errBaos.toString}Error invoking Scala compiler: ${e.getMessage}"))
+          (-1, String(outBaos.toString), String(s"${errBaos.toString}Error invoking Scala compiler: ${e.getMessage}"))
       }
     }
+    // Run Z unboxing bytecode optimization on successful compilation
+    if (result._1 == 0) {
+      try {
+        new org.sireum.lang.optimizer.ZUnboxer().transformDirectory(outDir.value)
+      } catch {
+        case t: Throwable =>
+          t.printStackTrace()
+      }
+    }
+    return result
   }
 
 }

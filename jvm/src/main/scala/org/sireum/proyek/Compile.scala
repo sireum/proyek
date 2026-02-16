@@ -35,7 +35,7 @@ object Compile {
 
   @ext("Compile_Ext") object Ext {
     def javac(javacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
-    def scalac(scalacFile: String, argFile: String, env: ISZ[(String, String)]): (Z, String, String) = $
+    def scalac(scalacFile: String, argFile: String, outDir: String, env: ISZ[(String, String)]): (Z, String, String) = $
   }
 
   @enum object CompileStatus {
@@ -385,7 +385,7 @@ object Compile {
       val argFile = outDir.up / s"scalac-args-$category"
       argFile.writeOver(st"${(scalaArgs, "\n")}".render)
       val scalac: Os.Path = scalaHome / "bin" / (if (Os.isWin) "scalac.bat" else "scalac")
-      val (scalacRc, scalacOut, scalacErr) = Ext.scalac(scalacFile = scalac.string, argFile = argFile.canon.string, env = env)
+      val (scalacRc, scalacOut, scalacErr) = Ext.scalac(scalacFile = scalac.string, argFile = argFile.canon.string, outDir = outDir.string, env = env)
       ok = scalacRc == 0
       sb = sb :+ st"$scalacOut"
       sb = sb :+ st"$scalacErr"
