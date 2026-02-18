@@ -94,10 +94,10 @@ object Compile_Ext {
           (-1, String(outBaos.toString), String(s"${errBaos.toString}Error invoking Scala compiler: ${e.getMessage}"))
       }
     }
-    // Run Z unboxing bytecode optimization on successful compilation
+    // Run bytecode optimizations on successful compilation
     if (result._1 == 0) {
       try {
-        new org.sireum.lang.optimizer.ZUnboxer().transformDirectory(outDir.value)
+        new org.sireum.lang.optimizer.BitsOptimizer().transformDirectory(outDir.value)
       } catch {
         case t: Throwable =>
           t.printStackTrace()
