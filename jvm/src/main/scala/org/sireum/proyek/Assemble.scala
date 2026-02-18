@@ -79,6 +79,7 @@ object Assemble {
     "--enable-url-protocols=https",
     "--no-fallback",
     "-H:+ReportExceptionStackTraces",
+    "-H:+AllowDeprecatedBuilderClassesOnImageClasspath",
     st"--initialize-at-run-time=${(graalRtPackagesOrClasses, ",")}".render
   )
 
