@@ -498,6 +498,10 @@ object cli {
         tpe = Type.Str(Some(','), None()),
         description = "Java options"
       ),
+      Opt(name = "junit5", longKey = "junit5", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Use JUnit5 runner"
+      ),
       Opt(
         name = "packages", longKey = "packages", shortKey = None(),
         tpe = Type.Str(Some(','), None()),

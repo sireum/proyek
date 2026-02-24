@@ -45,7 +45,8 @@ object Test {
           suffixes: ISZ[String],
           packageNames: ISZ[String],
           names: ISZ[String],
-          coverageOpt: Option[String]): Z = {
+          coverageOpt: Option[String],
+          isJUnit5: B): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
@@ -71,10 +72,9 @@ object Test {
     }
 
     val scalaLib = (dm.scalaHome / "lib" / "scala-library.jar").string
-    var args = javaOptions ++ ISZ[String](
-      "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render)
 
     val jacocoCli = dm.sireumHome / "lib" / "jacococli.jar"
+    var jacocoArgs = ISZ[String]()
     coverageOpt match {
       case Some(p) =>
         val prefix = Os.path(p)
@@ -84,31 +84,73 @@ object Test {
         dump.removeAll()
         dump.mkdirAll()
         val jacocoAgent = dm.sireumHome / "lib" / "jacocoagent.jar"
-        args = args :+ s"-javaagent:$jacocoAgent=destfile=$exec,classdumpdir=$dump"
+        jacocoArgs = jacocoArgs :+ s"-javaagent:$jacocoAgent=destfile=$exec,classdumpdir=$dump"
       case _ =>
     }
 
-    args = args ++ ISZ[String]("org.scalatest.tools.Runner",
-      "-oF", "-P1",
-      "-R",
-      st""""${
-        (if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
-        else testClasspath, " ")
-      }"""".render
-    )
-    args = args ++ (for (args2 <- for (name <- classNames) yield
-      ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
-    args = args ++ (for (args2 <- for (suffix <- suffixes) yield
-      ISZ[String]("-q", ops.StringOps(suffix).trim); arg <- args2) yield arg)
-    args = args ++ (for (args2 <- for (name <- packageNames) yield
-      ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
-    args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
+    var args = javaOptions ++ jacocoArgs ++ ISZ[String](
+      "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render)
 
-    val argFile = proyekDir / "java-test-args"
-    argFile.writeOver(st"${(args, "\n")}".render)
-
+    var exitCode: Z = 0
     val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
-    var exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
+
+    if (isJUnit5) {
+      // JUnit Platform: discover and run tests via registered TestEngine implementations
+      if (testClasspath.nonEmpty) {
+        // Fetch JUnit Platform launcher JARs from DependencyManager
+        val junitLauncherJars: ISZ[String] = for (
+          cif <- dm.fetch(ISZ(s"${DependencyManager.junitPlatformLauncherKey}${dm.junitPlatformLauncherVersion}"))
+        ) yield cif.path.string
+
+        // Extract JUnit5Runner from sireum.jar to avoid full sireum.jar on classpath
+        val junit5RunnerDir = proyekDir / "junit5-runner"
+        junit5RunnerDir.removeAll()
+        junit5RunnerDir.mkdirAll()
+        val sireumJar = dm.sireumHome / "bin" / "sireum.jar"
+        val jarExe = dm.javaHome / "bin" / "jar"
+        proc"$jarExe xf $sireumJar org/sireum/proyek/JUnit5Runner.class".at(junit5RunnerDir).run()
+
+        val junit5Classpath = (scalaLib +: (classpath.elements ++ junitLauncherJars)) :+ junit5RunnerDir.string
+        var junit5Args = javaOptions ++ jacocoArgs ++ ISZ[String](
+          "-ea", "-classpath", st"${(junit5Classpath, Os.pathSep)}".render,
+          "org.sireum.proyek.JUnit5Runner"
+        )
+        junit5Args = junit5Args ++ (for (args2 <- for (name <- classNames) yield
+          ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
+        junit5Args = junit5Args ++ (for (args2 <- for (suffix <- suffixes) yield
+          ISZ[String]("-q", ops.StringOps(suffix).trim); arg <- args2) yield arg)
+        junit5Args = junit5Args ++ (for (args2 <- for (name <- packageNames) yield
+          ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
+        junit5Args = junit5Args ++ (for (args2 <- for (name <- names) yield
+          ISZ[String]("-w", name); arg <- args2) yield arg)
+        junit5Args = junit5Args ++ testClasspath
+        val junit5ArgFile = proyekDir / "java-junit5-test-args"
+        junit5ArgFile.writeOver(st"${(junit5Args, "\n")}".render)
+        exitCode = proc"$javaExe @$junit5ArgFile".at(path).console.run().exitCode
+      }
+    } else {
+      // ScalaTest Runner
+      args = args ++ ISZ[String]("org.scalatest.tools.Runner",
+        "-oF", "-P1",
+        "-R",
+        st""""${
+          (if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
+          else testClasspath, " ")
+        }"""".render
+      )
+      args = args ++ (for (args2 <- for (name <- classNames) yield
+        ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
+      args = args ++ (for (args2 <- for (suffix <- suffixes) yield
+        ISZ[String]("-q", ops.StringOps(suffix).trim); arg <- args2) yield arg)
+      args = args ++ (for (args2 <- for (name <- packageNames) yield
+        ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
+      args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
+
+      val argFile = proyekDir / "java-test-args"
+      argFile.writeOver(st"${(args, "\n")}".render)
+
+      exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
+    }
 
     if (exitCode == 0) {
       coverageOpt match {
