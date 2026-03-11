@@ -511,6 +511,11 @@ object cli {
         name = "suffixes", longKey = "suffixes", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Specific test class name suffixes to run"
+      ),
+      Opt(
+        name = "tests", longKey = "tests", shortKey = None(),
+        tpe = Type.Str(Some(','), None()),
+        description = "Substring filters for selecting specific test cases"
       )
     ),
     groups = ISZ(

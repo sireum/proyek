@@ -45,6 +45,7 @@ object Test {
           suffixes: ISZ[String],
           packageNames: ISZ[String],
           names: ISZ[String],
+          tests: ISZ[String],
           coverageOpt: Option[String],
           isJUnit5: B): Z = {
 
@@ -145,6 +146,8 @@ object Test {
       args = args ++ (for (args2 <- for (name <- packageNames) yield
         ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
       args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
+      args = args ++ (for (args2 <- for (test <- tests) yield
+        ISZ[String]("-z", s""""${ops.StringOps(test).trim}""""); arg <- args2) yield arg)
 
       val argFile = proyekDir / "java-test-args"
       argFile.writeOver(st"${(args, "\n")}".render)
