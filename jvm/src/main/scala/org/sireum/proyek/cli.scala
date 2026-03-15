@@ -117,7 +117,7 @@ object cli {
 
   val commonCompileOpts: ISZ[Opt] = ISZ(
     Opt(name = "javac", longKey = "javac", shortKey = None(),
-      tpe = Type.Str(Some(','), Some("-source, 17, -target, 17, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options, -Xlint:deprecation, -proc:none")),
+      tpe = Type.Str(Some(','), Some("-source, 21, -target, 21, -encoding, utf8, -XDignore.symbol.file, -Xlint:-options, -Xlint:deprecation, -proc:none")),
       description = "Javac options"
     ),
     Opt(name = "fresh", longKey = "fresh", shortKey = Some('f'),
@@ -130,7 +130,7 @@ object cli {
       description = "Module IDs to force recompilation on"
     ),
     Opt(name = "scalac", longKey = "scalac", shortKey = None(),
-      tpe = Type.Str(Some(','), Some("-release, 17, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Werror, -language:postfixOps")),
+      tpe = Type.Str(Some(','), Some("-release, 21, -deprecation, -Yrangepos, -Ydelambdafy:method, -feature, -unchecked, -Werror, -language:postfixOps")),
       description = "Scalac options"
     ),
     Opt(name = "sha3", longKey = "sha3", shortKey = None(),

@@ -388,7 +388,7 @@ object Ive {
               |        </classPath>
               |        <javadocPath>
               |          <root type="composite">
-              |            <root url="https://docs.oracle.com/en/java/javase/17/docs/api/" type="simple" />
+              |            <root url="https://docs.oracle.com/en/java/javase/21/docs/api/" type="simple" />
               |          </root>
               |        </javadocPath>
               |      </roots>
@@ -737,7 +737,7 @@ object Ive {
     }
 
     def writeMisc(dotIdea: Os.Path, outDirName: String, javacOptions: ISZ[String]): Unit = {
-      var javaVersion: String = "17"
+      var javaVersion: String = "21"
       var i = 0
       while (i < javacOptions.size) {
         if (i + 1 < javacOptions.size) {
