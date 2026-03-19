@@ -47,7 +47,8 @@ object Test {
           names: ISZ[String],
           tests: ISZ[String],
           coverageOpt: Option[String],
-          isJUnit5: B): Z = {
+          isJUnit5: B,
+          parTest: B): Z = {
 
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
@@ -134,7 +135,7 @@ object Test {
     } else {
       // ScalaTest Runner
       args = args ++ ISZ[String]("org.scalatest.tools.Runner",
-        "-oF", "-P1",
+        "-oF", if (parTest) s"-P${Os.numOfProcessors}" else "-P1",
         "-R",
         st""""${
           (if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")

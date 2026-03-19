@@ -508,6 +508,11 @@ object cli {
         description = "Specific fully-qualified test package names to run"
       ),
       Opt(
+        name = "parTest", longKey = "par-test", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Enable test parallelization"
+      ),
+      Opt(
         name = "suffixes", longKey = "suffixes", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Specific test class name suffixes to run"
