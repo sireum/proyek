@@ -63,7 +63,8 @@ object Run {
     classpath = classpath :+ (dm.scalaHome / "lib" / "scala-library.jar").string
 
     val javaArgs = javaOptions ++
-      ISZ[String]("-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
+      ISZ[String]("--sun-misc-unsafe-memory-access=allow", "--enable-native-access=ALL-UNNAMED",
+        "-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
       (for (arg <- args) yield s"\"$arg\"")
     val argFile = proyekDir / "java-run-args"
     argFile.writeOver(

@@ -90,6 +90,7 @@ object Test {
     }
 
     var args = javaOptions ++ jacocoArgs ++ ISZ[String](
+      "--sun-misc-unsafe-memory-access=allow", "--enable-native-access=ALL-UNNAMED",
       "-ea", "-classpath", st"${(scalaLib +: classpath.elements, Os.pathSep)}".render)
 
     var exitCode: Z = 0
@@ -113,6 +114,7 @@ object Test {
 
         val junit5Classpath = (scalaLib +: (classpath.elements ++ junitLauncherJars)) :+ junit5RunnerDir.string
         var junit5Args = javaOptions ++ jacocoArgs ++ ISZ[String](
+          "--sun-misc-unsafe-memory-access=allow", "--enable-native-access=ALL-UNNAMED",
           "-ea", "-classpath", st"${(junit5Classpath, Os.pathSep)}".render,
           "org.sireum.proyek.JUnit5Runner"
         )
