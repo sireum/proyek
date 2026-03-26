@@ -265,7 +265,7 @@ object Reflect {
           val osST: ST = if (os.size <= 1) st"o" else st"(${(os, ", ")})"
           putss = putss(1 ~> (putss(1) :+
             methodSTF(T, info.name, info.ast.typeParams, Reflection.extractorName, T,
-              ISZ[AST.Typed](AST.Typed.Name(info.name, for (_ <- info.ast.typeParams) yield AST.Typed.Name(ISZ(anyName), ISZ()))),
+              ISZ[AST.Typed](AST.Typed.Name(info.name, AST.Typed.noRType, for (_ <- info.ast.typeParams) yield AST.Typed.Name(ISZ(anyName), AST.Typed.noRType, ISZ()))),
               (o: ST) =>
                 if (os.isEmpty) st"if ($o) MSome(T) else MNone()"
                 else
