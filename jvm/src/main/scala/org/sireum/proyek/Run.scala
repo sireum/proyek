@@ -64,11 +64,11 @@ object Run {
 
     val javaArgs = javaOptions ++
       ISZ[String]("--sun-misc-unsafe-memory-access=allow", "--enable-native-access=ALL-UNNAMED",
-        "-classpath", st"${(classpath, Os.pathSep)}".render, className) ++
-      (for (arg <- args) yield s"\"$arg\"")
+        "-classpath", st"${(classpath, Os.pathSep)}".render, className)
+    val argFileArgs: ISZ[(String, B)] =
+      (for (arg <- javaArgs) yield (arg, F)) ++ (for (arg <- args) yield (arg, T))
     val argFile = proyekDir / "java-run-args"
-    argFile.writeOver(
-      st"${(javaArgs, "\n")}".render)
+    argFile.writeOver(Test.argFileContent(argFileArgs))
 
     val javaExe = dm.javaHome / "bin" / (if (Os.isWin) "java.exe" else "java")
     proc"$javaExe @$argFile".at(dir).standard.console.runCheck()

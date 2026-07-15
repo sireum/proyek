@@ -35,6 +35,56 @@ object Test {
   val EXEC_MISSING: Z = -5
   val DUMP_MISSING: Z = -6
 
+  def argFileValue(value: String): String = {
+    return encodeArgFileValue(value, F)
+  }
+
+  def encodeArgFileValue(value: String, forceQuote: B): String = {
+    var quote = forceQuote || value == ""
+    var escaped = ISZ[C]()
+    for (c <- conversions.String.toCis(value)) {
+      c match {
+        case '\\' =>
+          quote = T
+          escaped = escaped :+ '\\' :+ '\\'
+        case '\"' =>
+          quote = T
+          escaped = escaped :+ '\\' :+ '\"'
+        case '\r' =>
+          quote = T
+          escaped = escaped :+ '\\' :+ 'r'
+        case '\n' =>
+          quote = T
+          escaped = escaped :+ '\\' :+ 'n'
+        case ' ' =>
+          quote = T
+          escaped = escaped :+ c
+        case '\t' =>
+          quote = T
+          escaped = escaped :+ c
+        case '\f' =>
+          quote = T
+          escaped = escaped :+ c
+        case '\'' =>
+          quote = T
+          escaped = escaped :+ c
+        case '#' =>
+          quote = T
+          escaped = escaped :+ c
+        case _ =>
+          escaped = escaped :+ c
+      }
+    }
+    if (!quote) {
+      return value
+    }
+    return st"\"${conversions.String.fromCis(escaped)}\"".render
+  }
+
+  def argFileContent(args: ISZ[(String, B)]): String = {
+    return st"${(for (arg <- args) yield encodeArgFileValue(arg._1, arg._2), "\n")}".render
+  }
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -129,31 +179,37 @@ object Test {
           ISZ[String]("-w", name); arg <- args2) yield arg)
         junit5Args = junit5Args ++ testClasspath
         val junit5ArgFile = proyekDir / "java-junit5-test-args"
-        junit5ArgFile.writeOver(st"${(junit5Args, "\n")}".render)
+        junit5ArgFile.writeOver(argFileContent(for (arg <- junit5Args) yield (arg, F)))
         exitCode = proc"$javaExe @$junit5ArgFile".at(path).console.run().exitCode
       }
     } else {
       // ScalaTest Runner
-      args = args ++ ISZ[String]("org.scalatest.tools.Runner",
-        "-oF", if (parTest) s"-P${Os.numOfProcessors}" else "-P1",
-        "-R",
-        st""""${
-          (if (Os.isWin) for (p <- testClasspath) yield ops.StringOps(p).replaceAllLiterally("\\", "\\\\")
-          else testClasspath, " ")
-        }"""".render
+      var scalaTestArgs: ISZ[(String, B)] = for (arg <- args) yield (arg, F)
+      scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](
+        ("org.scalatest.tools.Runner", F),
+        ("-oF", F),
+        (if (parTest) s"-P${Os.numOfProcessors}" else "-P1", F),
+        ("-R", F),
+        (st"${(testClasspath, " ")}".render, T)
       )
-      args = args ++ (for (args2 <- for (name <- classNames) yield
-        ISZ[String]("-s", ops.StringOps(name).trim); arg <- args2) yield arg)
-      args = args ++ (for (args2 <- for (suffix <- suffixes) yield
-        ISZ[String]("-q", ops.StringOps(suffix).trim); arg <- args2) yield arg)
-      args = args ++ (for (args2 <- for (name <- packageNames) yield
-        ISZ[String]("-m", ops.StringOps(name).trim); arg <- args2) yield arg)
-      args = args ++ (for (args2 <- for (name <- names) yield ISZ[String]("-w", name); arg <- args2) yield arg)
-      args = args ++ (for (args2 <- for (test <- tests) yield
-        ISZ[String]("-z", s""""${ops.StringOps(test).trim}""""); arg <- args2) yield arg)
+      for (name <- classNames) {
+        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-s", F), (ops.StringOps(name).trim, F))
+      }
+      for (suffix <- suffixes) {
+        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-q", F), (ops.StringOps(suffix).trim, F))
+      }
+      for (name <- packageNames) {
+        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-m", F), (ops.StringOps(name).trim, F))
+      }
+      for (name <- names) {
+        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-w", F), (name, F))
+      }
+      for (test <- tests) {
+        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-z", F), (ops.StringOps(test).trim, T))
+      }
 
       val argFile = proyekDir / "java-test-args"
-      argFile.writeOver(st"${(args, "\n")}".render)
+      argFile.writeOver(argFileContent(scalaTestArgs))
 
       exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
     }
@@ -187,7 +243,7 @@ object Test {
           }
 
           val jacocoArgFile = proyekDir / "jacoco-args"
-          jacocoArgFile.writeOver(st"${(commands, "\n")}".render)
+          jacocoArgFile.writeOver(argFileContent(for (arg <- commands) yield (arg, F)))
 
           exitCode = proc"$javaExe @$jacocoArgFile".at(path).run().exitCode
           println()
