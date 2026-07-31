@@ -513,6 +513,11 @@ object cli {
         description = "Enable test parallelization"
       ),
       Opt(
+        name = "sagaReport", longKey = "saga-report", shortKey = None(),
+        tpe = Type.Path(F, None()),
+        description = "Write a neutral gate report from ScalaTest JUnit XML (incompatible with --junit5)"
+      ),
+      Opt(
         name = "suffixes", longKey = "suffixes", shortKey = None(),
         tpe = Type.Str(Some(','), None()),
         description = "Specific test class name suffixes to run"

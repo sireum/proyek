@@ -35,6 +35,31 @@ object Test {
   val EXEC_MISSING: Z = -5
   val DUMP_MISSING: Z = -6
 
+  def validateSagaReportSelection(
+      classNames: ISZ[String],
+      suffixes: ISZ[String],
+      packageNames: ISZ[String],
+      names: ISZ[String]): (Z, String) = {
+    if (suffixes.nonEmpty || packageNames.nonEmpty || names.nonEmpty) {
+      return (
+        SagaReport.InvalidTarget,
+        "--saga-report requires selection exclusively through one or more --classes; it cannot be combined with --suffixes, --packages, or wildcard suite names")
+    }
+    if (classNames.isEmpty) {
+      return (
+        SagaReport.InvalidTarget,
+        "--saga-report requires one or more --classes so report completeness can be verified")
+    }
+    for (name <- classNames) {
+      if (ops.StringOps(name).trim == "") {
+        return (
+          SagaReport.InvalidTarget,
+          "--saga-report requires every --classes value to name a suite")
+      }
+    }
+    return (0, "")
+  }
+
   def argFileValue(value: String): String = {
     return encodeArgFileValue(value, F)
   }
@@ -85,6 +110,46 @@ object Test {
     return st"${(for (arg <- args) yield encodeArgFileValue(arg._1, arg._2), "\n")}".render
   }
 
+  def scalaTestArgs(args: ISZ[String],
+                    parTest: B,
+                    testClasspath: ISZ[String],
+                    classNames: ISZ[String],
+                    suffixes: ISZ[String],
+                    packageNames: ISZ[String],
+                    names: ISZ[String],
+                    tests: ISZ[String],
+                    sagaXmlDirOpt: Option[String]): ISZ[(String, B)] = {
+    var result: ISZ[(String, B)] = for (arg <- args) yield (arg, F)
+    result = result ++ ISZ[(String, B)](
+      ("org.scalatest.tools.Runner", F),
+      ("-oF", F),
+      (if (parTest) s"-P${Os.numOfProcessors}" else "-P1", F),
+      ("-R", F),
+      (st"${(testClasspath, " ")}".render, T)
+    )
+    sagaXmlDirOpt match {
+      case Some(xmlDir) =>
+        result = result ++ ISZ[(String, B)](("-u", F), (xmlDir, T))
+      case _ =>
+    }
+    for (name <- classNames) {
+      result = result ++ ISZ[(String, B)](("-s", F), (ops.StringOps(name).trim, F))
+    }
+    for (suffix <- suffixes) {
+      result = result ++ ISZ[(String, B)](("-q", F), (ops.StringOps(suffix).trim, F))
+    }
+    for (name <- packageNames) {
+      result = result ++ ISZ[(String, B)](("-m", F), (ops.StringOps(name).trim, F))
+    }
+    for (name <- names) {
+      result = result ++ ISZ[(String, B)](("-w", F), (name, F))
+    }
+    for (test <- tests) {
+      result = result ++ ISZ[(String, B)](("-z", F), (ops.StringOps(test).trim, T))
+    }
+    return result
+  }
+
   def run(path: Os.Path,
           outDirName: String,
           project: Project,
@@ -97,8 +162,29 @@ object Test {
           names: ISZ[String],
           tests: ISZ[String],
           coverageOpt: Option[String],
+          sagaReportOpt: Option[String],
           isJUnit5: B,
           parTest: B): Z = {
+
+    sagaReportOpt match {
+      case Some(reportPath) =>
+        if (isJUnit5) {
+          eprintln("--saga-report is only supported by the ScalaTest backend and cannot be combined with --junit5")
+          return SagaReport.InvalidTarget
+        }
+        val selectionValidation =
+          validateSagaReportSelection(classNames, suffixes, packageNames, names)
+        if (selectionValidation._1 != 0) {
+          eprintln(selectionValidation._2)
+          return selectionValidation._1
+        }
+        val validation = SagaReport.validateTarget(reportPath)
+        if (validation._1 != 0) {
+          eprintln(validation._2)
+          return validation._1
+        }
+      case _ =>
+    }
 
     val proyekDir = getProyekDir(path, outDirName, projectName, F)
     val projectOutDir = proyekDir / "modules"
@@ -184,34 +270,48 @@ object Test {
       }
     } else {
       // ScalaTest Runner
-      var scalaTestArgs: ISZ[(String, B)] = for (arg <- args) yield (arg, F)
-      scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](
-        ("org.scalatest.tools.Runner", F),
-        ("-oF", F),
-        (if (parTest) s"-P${Os.numOfProcessors}" else "-P1", F),
-        ("-R", F),
-        (st"${(testClasspath, " ")}".render, T)
-      )
-      for (name <- classNames) {
-        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-s", F), (ops.StringOps(name).trim, F))
-      }
-      for (suffix <- suffixes) {
-        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-q", F), (ops.StringOps(suffix).trim, F))
-      }
-      for (name <- packageNames) {
-        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-m", F), (ops.StringOps(name).trim, F))
-      }
-      for (name <- names) {
-        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-w", F), (name, F))
-      }
-      for (test <- tests) {
-        scalaTestArgs = scalaTestArgs ++ ISZ[(String, B)](("-z", F), (ops.StringOps(test).trim, T))
+      var sagaXmlDirOpt: Option[String] = None[String]()
+      sagaReportOpt match {
+        case Some(_) =>
+          val creation = SagaReport.createXmlDirectory(proyekDir.string)
+          if (creation._1 != 0) {
+            eprintln(creation._2)
+            return creation._1
+          }
+          sagaXmlDirOpt = Some(creation._2)
+        case _ =>
       }
 
+      val scalaTestRunnerArgs = scalaTestArgs(
+        args = args,
+        parTest = parTest,
+        testClasspath = testClasspath,
+        classNames = classNames,
+        suffixes = suffixes,
+        packageNames = packageNames,
+        names = names,
+        tests = tests,
+        sagaXmlDirOpt = sagaXmlDirOpt)
       val argFile = proyekDir / "java-test-args"
-      argFile.writeOver(argFileContent(scalaTestArgs))
+      argFile.writeOver(argFileContent(scalaTestRunnerArgs))
 
       exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
+
+      sagaReportOpt match {
+        case Some(reportPath) =>
+          val requestedSuiteNames: ISZ[String] =
+            for (name <- classNames) yield ops.StringOps(name).trim
+          val emission = SagaReport.emitAndCleanup(
+            sagaXmlDirOpt.get,
+            reportPath,
+            exitCode,
+            requestedSuiteNames)
+          if (emission._1 != 0) {
+            eprintln(emission._2)
+            return emission._1
+          }
+        case _ =>
+      }
     }
 
     if (exitCode == 0) {
