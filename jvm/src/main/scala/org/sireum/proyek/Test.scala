@@ -266,7 +266,10 @@ object Test {
         junit5Args = junit5Args ++ testClasspath
         val junit5ArgFile = proyekDir / "java-junit5-test-args"
         junit5ArgFile.writeOver(argFileContent(for (arg <- junit5Args) yield (arg, F)))
-        exitCode = proc"$javaExe @$junit5ArgFile".at(path).console.run().exitCode
+        // Test JVMs must use independently reaped ProcessBuilder children:
+        // NuProcess's shared Linux reaper can strand concurrent/long-lived
+        // test launches before they produce a terminal result.
+        exitCode = proc"$javaExe @$junit5ArgFile".at(path).standard.console.run().exitCode
       }
     } else {
       // ScalaTest Runner
@@ -295,7 +298,8 @@ object Test {
       val argFile = proyekDir / "java-test-args"
       argFile.writeOver(argFileContent(scalaTestRunnerArgs))
 
-      exitCode = proc"$javaExe @$argFile".at(path).console.run().exitCode
+      // Keep ScalaTest on the same independently reaped backend as JUnit.
+      exitCode = proc"$javaExe @$argFile".at(path).standard.console.run().exitCode
 
       sagaReportOpt match {
         case Some(reportPath) =>
