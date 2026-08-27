@@ -713,7 +713,8 @@ class SagaReportTest extends TestSuite {
         |-classpath
         |cp
         |org.scalatest.tools.Runner
-        |-oF
+        |-C
+        |org.sireum.test.ScalaTestReporter
         |-P1
         |-R
         |"/a path /b"

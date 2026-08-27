@@ -34,6 +34,7 @@ object Test {
 
   val EXEC_MISSING: Z = -5
   val DUMP_MISSING: Z = -6
+  val SCALA_TEST_REPORTER: String = "org.sireum.test.ScalaTestReporter"
 
   def validateSagaReportSelection(
       classNames: ISZ[String],
@@ -122,7 +123,8 @@ object Test {
     var result: ISZ[(String, B)] = for (arg <- args) yield (arg, F)
     result = result ++ ISZ[(String, B)](
       ("org.scalatest.tools.Runner", F),
-      ("-oF", F),
+      ("-C", F),
+      (SCALA_TEST_REPORTER, F),
       (if (parTest) s"-P${Os.numOfProcessors}" else "-P1", F),
       ("-R", F),
       (st"${(testClasspath, " ")}".render, T)
