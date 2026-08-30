@@ -111,6 +111,12 @@ object Test {
     return st"${(for (arg <- args) yield encodeArgFileValue(arg._1, arg._2), "\n")}".render
   }
 
+  def freshArgFile(label: String): Os.Path = {
+    val result = Os.tempFix("sireum-proyek-", s"-$label.args")
+    result.removeOnExit()
+    return result
+  }
+
   def scalaTestArgs(args: ISZ[String],
                     parTest: B,
                     testClasspath: ISZ[String],
@@ -266,7 +272,7 @@ object Test {
         junit5Args = junit5Args ++ (for (args2 <- for (name <- names) yield
           ISZ[String]("-w", name); arg <- args2) yield arg)
         junit5Args = junit5Args ++ testClasspath
-        val junit5ArgFile = proyekDir / "java-junit5-test-args"
+        val junit5ArgFile = freshArgFile("junit5-test")
         junit5ArgFile.writeOver(argFileContent(for (arg <- junit5Args) yield (arg, F)))
         // Test JVMs must use independently reaped ProcessBuilder children:
         // NuProcess's shared Linux reaper can strand concurrent/long-lived
@@ -297,7 +303,7 @@ object Test {
         names = names,
         tests = tests,
         sagaXmlDirOpt = sagaXmlDirOpt)
-      val argFile = proyekDir / "java-test-args"
+      val argFile = freshArgFile("scala-test")
       argFile.writeOver(argFileContent(scalaTestRunnerArgs))
 
       // Keep ScalaTest on the same independently reaped backend as JUnit.
@@ -348,7 +354,7 @@ object Test {
             commands = commands ++ ISZ[String]("--sourcefiles", src.string)
           }
 
-          val jacocoArgFile = proyekDir / "jacoco-args"
+          val jacocoArgFile = freshArgFile("jacoco")
           jacocoArgFile.writeOver(argFileContent(for (arg <- commands) yield (arg, F)))
 
           exitCode = proc"$javaExe @$jacocoArgFile".at(path).run().exitCode

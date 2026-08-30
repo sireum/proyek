@@ -692,6 +692,21 @@ class SagaReportTest extends TestSuite {
     assert(Files.readAllBytes(report).sameElements(first))
   }
 
+  "concurrent test launches use distinct argument files" in {
+    val left = Test.freshArgFile("scala-test")
+    val right = Test.freshArgFile("scala-test")
+    try {
+      left.writeOver("left")
+      right.writeOver("right")
+      assert(left != right)
+      assert(left.read == string"left")
+      assert(right.read == string"right")
+    } finally {
+      left.removeAll()
+      right.removeAll()
+    }
+  }
+
   "no-report ScalaTest args match the pre-wave bytes and opt-in adds one XML reporter" in tempRoot { root =>
     val before = Files.list(root)
     val beforeNames =
