@@ -714,7 +714,7 @@ class SagaReportTest extends TestSuite {
       finally before.close()
     val args = Test.scalaTestArgs(
       args = ISZ("-ea", "-classpath", "cp"),
-      parTest = F,
+      parTest = None(),
       testClasspath = ISZ("/a path", "/b"),
       classNames = ISZ("a.Test"),
       suffixes = ISZ("Suite"),
@@ -752,7 +752,7 @@ class SagaReportTest extends TestSuite {
 
     val withReport = Test.scalaTestArgs(
       args = ISZ("-ea", "-classpath", "cp"),
-      parTest = F,
+      parTest = None(),
       testClasspath = ISZ("/a path", "/b"),
       classNames = ISZ("a.Test"),
       suffixes = ISZ(),
@@ -763,5 +763,17 @@ class SagaReportTest extends TestSuite {
     assert(withReport.elements.count(_._1 == string"-u") == 1)
     val index = withReport.elements.indexWhere(_._1 == string"-u")
     assert(withReport(index + 1) == (String("/private/xml dir"), T))
+
+    val boundedParallel = Test.scalaTestArgs(
+      args = ISZ(),
+      parTest = Some(z"7"),
+      testClasspath = ISZ("/a"),
+      classNames = ISZ(),
+      suffixes = ISZ(),
+      packageNames = ISZ(),
+      names = ISZ(),
+      tests = ISZ(),
+      sagaXmlDirOpt = None())
+    assert(boundedParallel.elements.exists(_._1 == string"-P7"))
   }
 }

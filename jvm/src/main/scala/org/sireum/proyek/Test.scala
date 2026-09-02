@@ -118,7 +118,7 @@ object Test {
   }
 
   def scalaTestArgs(args: ISZ[String],
-                    parTest: B,
+                    parTest: Option[Z],
                     testClasspath: ISZ[String],
                     classNames: ISZ[String],
                     suffixes: ISZ[String],
@@ -127,11 +127,16 @@ object Test {
                     tests: ISZ[String],
                     sagaXmlDirOpt: Option[String]): ISZ[(String, B)] = {
     var result: ISZ[(String, B)] = for (arg <- args) yield (arg, F)
+    val testThreads: Z = parTest match {
+      case Some(n) if n > 0 => n
+      case Some(_) => Os.numOfProcessors
+      case _ => 1
+    }
     result = result ++ ISZ[(String, B)](
       ("org.scalatest.tools.Runner", F),
       ("-C", F),
       (SCALA_TEST_REPORTER, F),
-      (if (parTest) s"-P${Os.numOfProcessors}" else "-P1", F),
+      (s"-P$testThreads", F),
       ("-R", F),
       (st"${(testClasspath, " ")}".render, T)
     )
@@ -172,7 +177,7 @@ object Test {
           coverageOpt: Option[String],
           sagaReportOpt: Option[String],
           isJUnit5: B,
-          parTest: B): Z = {
+          parTest: Option[Z]): Z = {
 
     sagaReportOpt match {
       case Some(reportPath) =>

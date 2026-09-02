@@ -509,8 +509,8 @@ object cli {
       ),
       Opt(
         name = "parTest", longKey = "par-test", shortKey = None(),
-        tpe = Type.Flag(F),
-        description = "Enable test parallelization"
+        tpe = Type.NumFlag(0, Some(1), None()),
+        description = "Enable test parallelization; omit worker count to use all processors"
       ),
       Opt(
         name = "sagaReport", longKey = "saga-report", shortKey = None(),
