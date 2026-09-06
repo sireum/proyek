@@ -69,6 +69,10 @@ import ModuleProcessor._
     return if (path.exists) for (p <- Os.Path.walk(path, F, followSymLink, filter)) yield p else ISZ()
   }
 
+  def findResources(path: Os.Path): ISZ[Os.Path] = {
+    return if (path.exists) Os.Path.walk(path, F, followSymLink, (_: Os.Path) => T) else ISZ()
+  }
+
   @pure def fingerprint(imm: I, p: Os.Path): String = {
     if (sha3) {
       return st"${toInput(imm, p).fingerprint}".render
@@ -81,6 +85,16 @@ import ModuleProcessor._
     return FrontEnd.Input(p.read, Some(p.toUri))
   }
 
+  def resourceFingerprint(p: Os.Path): String = {
+    return p.sha3(0)
+  }
+
+  def isInResourceRoot(file: Os.Path, resourceRoot: Os.Path): B = {
+    val filePath = file.canon.string
+    val rootPath = resourceRoot.canon.string
+    return filePath == rootPath || ops.StringOps(filePath).startsWith(s"$rootPath${Os.fileSep}")
+  }
+
   def run(imm: I, mut: M, dm: DependencyManager, files: HashSMap[String, String], reporter: Reporter): RunResult[I] = {
     var sourceInputs = ISZ[Os.Path]()
     var testSourceInputs = ISZ[Os.Path]()
@@ -90,6 +104,34 @@ import ModuleProcessor._
     for (testSource <- ProjectUtil.moduleTestSources(module)) {
       testSourceInputs = testSourceInputs ++ findSources(imm, testSource)
     }
+    val resourceInputs: ISZ[Os.Path] = {
+      val inputs = Buffer.create[Os.Path]()
+      for (resource <- ProjectUtil.moduleResources(module)) {
+        for (input <- findResources(resource)) {
+          inputs.append(input)
+        }
+      }
+      inputs.toIS
+    }
+    val testResourceInputs: ISZ[Os.Path] = {
+      val inputs = Buffer.create[Os.Path]()
+      for (resource <- ProjectUtil.moduleTestResources(module)) {
+        for (input <- findResources(resource)) {
+          inputs.append(input)
+        }
+      }
+      inputs.toIS
+    }
+
+    val fingerprintInputs: ISZ[(Os.Path, B)] =
+      (for (p <- sourceInputs) yield (p, F)) ++
+        (for (p <- testSourceInputs) yield (p, F)) ++
+        (for (p <- resourceInputs) yield (p, T)) ++
+        (for (p <- testResourceInputs) yield (p, T))
+    def inputFingerprint(input: (Os.Path, B)): (String, String) = {
+      val p = input._1
+      return (root.relativize(p).string, if (input._2) resourceFingerprint(p) else fingerprint(imm, p))
+    }
 
     var _initFingerprintMap = F
     var _fingerprintMap = HashMap.empty[String, String]
@@ -97,18 +139,35 @@ import ModuleProcessor._
       if (!_initFingerprintMap) {
         _initFingerprintMap = T
         _fingerprintMap = _fingerprintMap ++ (
-          if (par > 1 && sha3) ops.ISZOps(sourceInputs ++ testSourceInputs).
-            mParMapCores((p: Os.Path) => (root.relativize(p).string, fingerprint(imm, p)), par)
-          else for (p <- sourceInputs ++ testSourceInputs) yield (root.relativize(p).string, fingerprint(imm, p)))
+          if (par > 1 && sha3) ops.ISZOps(fingerprintInputs).mParMapCores(inputFingerprint _, par)
+          else for (input <- fingerprintInputs) yield inputFingerprint(input))
       }
       return _fingerprintMap
     }
 
     val fingerprintCache = outDir / s"${module.id}${if (sha3) ".sha3" else ""}.json"
     val (shouldProcess, changedFiles): (B, HashSet[String]) = if (files.nonEmpty) {
-      val cfSet = HashSet.empty[String] ++
+      var cfSet = HashSet.empty[String] ++
         (for (input <- sourceInputs if files.contains(input.string)) yield input.string) ++
-        (for (input <- testSourceInputs if files.contains(input.string)) yield input.string)
+        (for (input <- testSourceInputs if files.contains(input.string)) yield input.string) ++
+        (for (input <- resourceInputs if files.contains(input.string)) yield input.string) ++
+        (for (input <- testResourceInputs if files.contains(input.string)) yield input.string)
+      val resourceRoots: ISZ[Os.Path] =
+        (for (resource <- module.resources) yield ProjectUtil.pathSep(ProjectUtil.moduleBasePath(module), resource)) ++
+          (for (resource <- module.testResources) yield ProjectUtil.pathSep(ProjectUtil.moduleBasePath(module), resource))
+      val selectedResourceFiles = Buffer.create[String]()
+      for (file <- files.keys) {
+        var selected = F
+        for (resourceRoot <- resourceRoots) {
+          if (isInResourceRoot(Os.path(file), resourceRoot)) {
+            selected = T
+          }
+        }
+        if (selected) {
+          selectedResourceFiles.append(file)
+        }
+      }
+      cfSet = cfSet ++ selectedResourceFiles.toIS
       (cfSet.nonEmpty, cfSet)
     } else if (!force && fingerprintCache.exists) {
       val jsonParser = Json.Parser.create(fingerprintCache.read)
@@ -129,6 +188,8 @@ import ModuleProcessor._
                 cfSet = cfSet + toAbs(k)
               }
             case _ =>
+              diff = T
+              cfSet = cfSet + toAbs(k)
           }
         }
       }
@@ -149,4 +210,3 @@ import ModuleProcessor._
     return RunResult(r, tipe, changed, time)
   }
 }
-
