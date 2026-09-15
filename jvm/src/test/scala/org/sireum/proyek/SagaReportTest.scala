@@ -722,7 +722,12 @@ class SagaReportTest extends TestSuite {
       names = ISZ("root.pkg"),
       tests = ISZ("focused test"),
       sagaXmlDirOpt = None())
-    val actual = Test.argFileContent(args).value.getBytes(StandardCharsets.UTF_8)
+    // argFileContent renders through ST, and ST.render emits System.lineSeparator, so the arg
+    // file is CRLF-separated on Windows and LF elsewhere while preWave below is always LF.
+    // Both forms are correct -- java's @argfile parser treats \r as separating whitespace --
+    // so normalize the separator and compare the bytes that actually carry meaning.
+    val actual = Test.argFileContent(args).value
+      .replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8)
     val preWave =
       """-ea
         |-classpath
